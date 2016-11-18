@@ -1,0 +1,11 @@
+[0]
+	insmod/rmmod							DONE
+
+[1]
+	insmod/get_numhit/get_numtotal/rmmod				DONE
+
+[2]
+	insmod/checkpoint_add/checkpoint_del/rmmod			DONE
+
+[3]
+	insmod/checkpoint_add/checkpoint_restart/rmmod
