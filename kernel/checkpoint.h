@@ -5,12 +5,13 @@
 #include <linux/kernel.h>
 #include <linux/kprobes.h>
 #include <linux/types.h>
+#include <linux/rwlock.h>
 
 #define NAME_LEN_MAX	32
 #define FUNC_LEN_MAX	1024
 #define RETPROBE_MAXACTIVE	16
 
-extern struct list_head cproot;
+
 struct checkpoint;
 struct checkpoint {
 	struct checkpoint *parent;	/* who called this checkpoint */
@@ -20,6 +21,11 @@ struct checkpoint {
 	char *name;			/* checkpoint's specific name */
 	struct kprobe *this_kprobe;	/* the probe this checkpoint using */
 	struct kretprobe *this_retprobe;/* against to this_kprobe */
+};
+
+struct cphit {
+	struct list_head list;
+	struct checkpoint *cp;
 };
 
 struct checkpoint_user {
@@ -41,6 +47,7 @@ extern int checkpoint_add(char *name, char *func, unsigned long offset);
 extern void checkpoint_del(char *name);
 extern void checkpoint_restart(void);
 extern void checkpoint_exit(void);
+extern unsigned long checkpoint_get_numhit(void);
 extern unsigned long checkpoint_count(void);
 
 #endif

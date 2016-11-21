@@ -1,20 +1,32 @@
 #include "checkpoint.h"
 
-struct list_head cproot;
+struct list_head cproot;	/* all checkpoint we have probed */
+struct list_head cphit_root;	/* current call stack, maybe thread specific? */
+rwlock_t cproot_rwlock;
+rwlock_t cphit_root_rwlock;
 
 void checkpoint_init(void)
 {
 	INIT_LIST_HEAD(&cproot);
+	INIT_LIST_HEAD(&cphit_root);
+	rwlock_init(&cproot_rwlock);
+	rwlock_init(&cphit_root_rwlock);
 }
 
 static int name_in_cplist(char *name)
 {
 	struct checkpoint *tmp;
+
+	read_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
 		if ((strlen(name) == strlen(tmp->name)) &&
-			!strcmp(tmp->name, name))
+			!strcmp(tmp->name, name)) {
+			read_unlock(&cproot_rwlock);
 			return 1;
+		}
 	}
+	read_unlock(&cproot_rwlock);
+
 	return 0;
 }
 
@@ -61,9 +73,11 @@ int checkpoint_add(char *name, char *func, unsigned long offset)
 		if (!new->this_kprobe)
 			goto err_free2;
 		memset(new->this_kprobe, 0, sizeof(struct kprobe));
+
 		new->this_kprobe->pre_handler = cp_default_kp_prehdl;
 		new->this_kprobe->symbol_name = func;
 		new->this_kprobe->offset = offset;
+
 		if ((err = register_kprobe(new->this_kprobe)))
 			goto err_free3;
 	} else {
@@ -71,17 +85,20 @@ int checkpoint_add(char *name, char *func, unsigned long offset)
 		if (!new->this_retprobe)
 			goto err_free2;
 		memset(new->this_retprobe, 0, sizeof(struct kretprobe));
+
 		new->this_retprobe->entry_handler = cp_default_ret_entryhdl;
 		new->this_retprobe->maxactive = RETPROBE_MAXACTIVE;
 		new->this_retprobe->handler = cp_default_ret_hdl;
-		/* XXX:should insmod the target first */
 		new->this_retprobe->kp.addr =
 				(kprobe_opcode_t *)kallsyms_lookup_name(func);
+
 		if ((err = register_kretprobe(new->this_retprobe)))
 			goto err_free3;
 	}
 
+	write_lock(&cproot_rwlock);
 	list_add_tail(&new->siblings, &cproot);
+	write_unlock(&cproot_rwlock);
 	return 0;
 
 err_free3:
@@ -97,14 +114,23 @@ err_free:
 void checkpoint_del(char *name)
 {
 	struct checkpoint *tmp;
+
+	/*
+	 * TODO: need to check the target checkpoint is not in cphit_root
+	 * if does, then we may just remove the target checkpoint in cphit_root
+	 */
+
+
 	/*
 	 * XXX:here we do not need list_for_each_entry_safe,
 	 * because when we find the target checkpoint, we jump out the loop
 	 */
+	write_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
 		if ((strlen(name) == strlen(tmp->name)) &&
 			!strcmp(tmp->name, name)) {
 			list_del(&tmp->siblings);
+
 			if (tmp->this_kprobe) {
 				unregister_kprobe(tmp->this_kprobe);
 				kfree(tmp->this_kprobe);
@@ -117,11 +143,16 @@ void checkpoint_del(char *name)
 			break;
 		}
 	}
+	write_unlock(&cproot_rwlock);
 }
 
 void checkpoint_restart(void)
 {
 	struct checkpoint *tmp, *next;
+
+	/* TODO: need to check cphit_root */
+
+	write_lock(&cproot_rwlock);
 	list_for_each_entry_safe(tmp, next, &cproot, siblings) {
 		list_del(&tmp->siblings);
 		if (tmp->this_kprobe) {
@@ -135,14 +166,34 @@ void checkpoint_restart(void)
 		kfree(tmp);
 	}
 	INIT_LIST_HEAD(&cproot);
+	write_unlock(&cproot_rwlock);
+}
+
+/* this function actually returns the number of functions been hit */
+unsigned long checkpoint_get_numhit(void)
+{
+	unsigned long num = 0;
+	struct checkpoint *tmp;
+
+	read_lock(&cproot_rwlock);
+	list_for_each_entry(tmp, &cproot, siblings) {
+		if (tmp->hit)
+			num++;
+	}
+	read_unlock(&cproot_rwlock);
+
+	return num;
 }
 
 unsigned long checkpoint_count(void)
 {
 	unsigned long num = 0;
 	struct checkpoint *tmp;
+
+	read_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings)
 		num++;
+	read_unlock(&cproot_rwlock);
 
 	return num;
 }

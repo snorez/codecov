@@ -20,26 +20,13 @@
  *	* some initialize things
  */
 
-/* this function actually returns the number of functions been hit */
-static unsigned long get_numhit(void)
-{
-	unsigned long num = 0;
-	struct checkpoint *tmp;
-
-	list_for_each_entry(tmp, &cproot, siblings) {
-		if (tmp->hit)
-			num++;
-	}
-	return num;
-}
-
 static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	unsigned long res;
 
 	switch (cmd) {
 	case COV_COUNT_HIT:
-		res = get_numhit();
+		res = checkpoint_get_numhit();
 		return copy_to_user((unsigned long __user *)arg, &res,
 				    sizeof(unsigned long));
 	case COV_COUNT_CP:
