@@ -5,7 +5,7 @@ CONFIG_MODULE_SIG=n
 # module license `unspecific` taint kernel # even we use MODULE_LICENSE
 # unknown symbol xxx
 obj-m += code_cov.o
-code_cov-objs := codecov.o checkpoint.o coverr.o probe.o
+code_cov-objs := codecov.o checkpoint.o probe.o cov_thread.o thread_buffer.o
 KVER := `uname -r`
 KDIR = /lib/modules/$(KVER)/build
 

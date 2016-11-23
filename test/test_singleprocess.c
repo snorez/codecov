@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
-#include <stdlib.h>
 
 char *func_to_probe[] = {
 	"ovl_is_opaquedir",
@@ -110,8 +109,6 @@ int main(int argc, char *argv[])
 	int err, i;
 	char *func;
 	cov_register();
-	char *pid0_to_read = "/home/test/Desktop/ofs/merge/l0.txt";
-	char *pid1_to_read = "/home/test/Desktop/ofs/merge/u0.txt";
 
 	for (i = 0; i < sizeof(func_to_probe)/sizeof(char *); i++) {
 		err = checkpoint_add(func_to_probe[i], func_to_probe[i], 0);
@@ -119,40 +116,8 @@ int main(int argc, char *argv[])
 			printf("checkpoint_add %s err: %s\n", func_to_probe[i],
 				strerror(errno));
 	}
-	char *buffer = malloc(THREAD_BUFFER_SIZE);
-	if (!buffer) {
-		cov_unregister();
-		return -1;
-	}
-	memset(buffer, 0, THREAD_BUFFER_SIZE);
 
-	int pid;
-	if ((pid = fork()) < 0) {
-		perror("fork");
-	} else if (pid == 0) {
-		cov_register();
-		int fd = open(pid1_to_read, O_RDONLY);
-		if (fd == -1)
-			perror("open pid1_to_read");
-		close(fd);
-
-		int err = cov_get_buffer(buffer, THREAD_BUFFER_SIZE);
-		if (err != -1)
-			printf("pid1: \n%s\n", buffer);
-		cov_unregister();
-		exit(0);
-	}
-
-	sleep(9);
-	int fd = open(pid0_to_read, O_RDONLY);
-	if (fd == -1)
-		perror("open pid0_to_read");
-	close(fd);
-
-	err = cov_get_buffer(buffer, THREAD_BUFFER_SIZE);
-	if (err != -1)
-		printf("pid0: \n%s\n", buffer);
-
+	getchar();
 	double percent;
 	err = get_coverage(&percent);
 	printf("%d\n", err);

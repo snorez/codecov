@@ -5,18 +5,24 @@ static int cov_fd;
 
 int cov_register(void)
 {
-	int err;
+	int err = 0;
 
 	cov_fd = open(cov_file, O_RDONLY);
 	if (cov_fd == -1)
 		return -1;
-	/* TODO: for now, we just open the file descriptor */
 
-	return 0;
+	err = ioctl(cov_fd, COV_REGISTER, 0);
+	if (err == -1) {
+		close(cov_fd);
+		cov_fd = -1;
+	}
+
+	return err;
 }
 
 int cov_unregister(void)
 {
+	ioctl(cov_fd, COV_UNREGISTER, 0);
 	close(cov_fd);
 	return 0;
 }
@@ -81,4 +87,13 @@ int checkpoint_restart(void)
 {
 	int err = ioctl(cov_fd, COV_RESTART_CP, (unsigned long)0);
 	return (err == -1) ? -1 : 0;
+}
+
+int cov_get_buffer(char *buffer, size_t len)
+{
+	struct buffer_user bu;
+	bu.buffer = buffer;
+	bu.len = len;
+
+	return ioctl(cov_fd, COV_GET_BUFFER, (unsigned long)&bu);
 }

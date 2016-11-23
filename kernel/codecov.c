@@ -1,18 +1,4 @@
-#include <linux/module.h>
-#include <linux/init.h>
-#include <linux/slab.h>
-#include <linux/kprobes.h>
-#include <linux/kernel.h>
-#include <linux/types.h>
-#include <linux/kallsyms.h>
-#include <linux/file.h>
-#include <linux/debugfs.h>
-#include <linux/err.h>
-#include <asm/ptrace.h>
-#include <asm/uaccess.h>
 #include "./codecov.h"
-#include "./checkpoint.h"
-#include "./coverr.h"
 
 /*
  * this file do these things:
@@ -29,10 +15,12 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		res = checkpoint_get_numhit();
 		return copy_to_user((unsigned long __user *)arg, &res,
 				    sizeof(unsigned long));
+
 	case COV_COUNT_CP:
 		res = checkpoint_count();
 		return copy_to_user((unsigned long __user *)arg, &res,
 				    sizeof(unsigned long));
+
 	case COV_ADD_CP: {
 		struct checkpoint_user new;
 		char *name, *func;
@@ -70,6 +58,7 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		kfree(func);
 		return res;
 	}
+
 	case COV_DEL_CP: {
 		struct checkpoint_user new;
 		char *name;
@@ -93,9 +82,25 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		kfree(name);
 		return 0;
 	}
+
 	case COV_RESTART_CP:
 		checkpoint_restart();
 		return 0;
+
+	case COV_REGISTER:
+		return cov_thread_add();
+
+	case COV_UNREGISTER:
+		cov_thread_del();
+		return 0;
+
+	case COV_GET_BUFFER: {
+		struct buffer_user bu;
+		if (copy_from_user(&bu, (void __user *)arg, sizeof(bu)))
+			return -EFAULT;
+		return ctbuf_get(bu.buffer, bu.len);
+	}
+
 	default:
 		return -ENOTSUPP;
 	}
@@ -114,12 +119,12 @@ static int __init codecov_init(void)
 	/* TODO */
 	cov_entry = debugfs_create_file("codecov_entry", S_IRWXU | S_IROTH, NULL,
 					NULL, &cov_ops);
-	if (!cov_entry) {
-		pr_err("debugfs_create_file err\n");
+	if (!cov_entry)
 		return -1;
-	}
+
+	cov_thread_init();
 	checkpoint_init();
-	coverr_init();
+
 	return 0;
 }
 
@@ -127,8 +132,8 @@ static void __exit codecov_exit(void)
 {
 	/* TODO */
 	debugfs_remove(cov_entry);
+	cov_thread_exit();
 	checkpoint_exit();
-	coverr_exit();
 }
 
 MODULE_LICENSE("GPL");

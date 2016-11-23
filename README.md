@@ -13,6 +13,10 @@ CONFIG_KASAN/CONFIG_KTSAN..
 
 It seems that what we do now and syzkaller are similar.
 
+we provide two global lists, the functions list we probed, and the threads that
+registered. If the probed functions triggered, but current thread not registered,
+then we do nothing.
+
 # Usage
 + modify your /etc/fstab, add this line
 	debugfs	/sys/kernel/debug	debugfs	mode=0755,noauto	0	0
@@ -29,9 +33,9 @@ It seems that what we do now and syzkaller are similar.
 + new path notify
 + till code coverage gets to 100%
 + usespace support libs
++ multiple thread support
 
 # things doesn't do yet
-+ multiple thread support
 + also mutiple thread err message
 + subpath in functions
 + output the path map

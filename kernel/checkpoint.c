@@ -1,16 +1,12 @@
 #include "checkpoint.h"
 
 struct list_head cproot;	/* all checkpoint we have probed */
-struct list_head cphit_root;	/* current call stack, maybe thread specific? */
 rwlock_t cproot_rwlock;
-rwlock_t cphit_root_rwlock;
 
 void checkpoint_init(void)
 {
 	INIT_LIST_HEAD(&cproot);
-	INIT_LIST_HEAD(&cphit_root);
 	rwlock_init(&cproot_rwlock);
-	rwlock_init(&cphit_root_rwlock);
 }
 
 static int name_in_cplist(char *name)

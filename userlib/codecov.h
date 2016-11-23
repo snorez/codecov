@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/user.h>
 
 #define COV_IOC_MAGIC		'z'
 #define COV_COUNT_HIT		_IOWR(COV_IOC_MAGIC, 0, unsigned long)
@@ -13,6 +14,9 @@
 #define COV_ADD_CP		_IOWR(COV_IOC_MAGIC, 2, unsigned long)
 #define COV_DEL_CP		_IOWR(COV_IOC_MAGIC, 3, unsigned long)
 #define COV_RESTART_CP		_IOWR(COV_IOC_MAGIC, 4, unsigned long)
+#define COV_REGISTER		_IOWR(COV_IOC_MAGIC, 5, unsigned long)
+#define COV_UNREGISTER		_IOWR(COV_IOC_MAGIC, 6, unsigned long)
+#define COV_GET_BUFFER		_IOWR(COV_IOC_MAGIC, 7, unsigned long)
 
 struct checkpoint {
 	size_t name_len;
@@ -20,6 +24,12 @@ struct checkpoint {
 	size_t func_len;
 	char *func;
 	unsigned long offset;
+};
+
+#define THREAD_BUFFER_SIZE	PAGE_SIZE*8
+struct buffer_user {
+	char *buffer;
+	size_t len;
 };
 
 extern int checkpoint_add(char *name, char *func, unsigned long offset);
@@ -30,5 +40,6 @@ extern int get_coverage(double *percent);
 extern int checkpoint_restart(void);
 extern int cov_register(void);
 extern int cov_unregister(void);
+extern int cov_get_buffer(char *buffer, size_t len);
 
 #endif
