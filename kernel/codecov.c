@@ -31,7 +31,7 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			return -EINVAL;
 
 		name = kmalloc(new.name_len+1, GFP_KERNEL);
-		if (!name)
+		if (unlikely(!name))
 			return -ENOMEM;
 		memset(name, 0, new.name_len+1);
 		if (copy_from_user(name, (unsigned long __user *)new.name,
@@ -41,7 +41,7 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		}
 
 		func = kmalloc(new.func_len+1, GFP_KERNEL);
-		if (!func) {
+		if (unlikely(!func)) {
 			kfree(name);
 			return -ENOMEM;
 		}
@@ -69,7 +69,7 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			return -EINVAL;
 
 		name = kmalloc(new.name_len+1, GFP_KERNEL);
-		if (!name)
+		if (unlikely(!name))
 			return -ENOMEM;
 		memset(name, 0, new.name_len+1);
 		if (copy_from_user(name, (unsigned long __user *)new.name,
@@ -88,7 +88,7 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return 0;
 
 	case COV_REGISTER:
-		return cov_thread_add();
+		return cov_thread_add(arg);
 
 	case COV_UNREGISTER:
 		cov_thread_del();
@@ -100,6 +100,11 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			return -EFAULT;
 		return ctbuf_get(bu.buffer, bu.len);
 	}
+
+	case COV_PATH_COUNT:
+		res = path_count();
+		return copy_to_user((void __user *)arg, &res,
+				    sizeof(unsigned long));
 
 	default:
 		return -ENOTSUPP;
@@ -119,7 +124,7 @@ static int __init codecov_init(void)
 	/* TODO */
 	cov_entry = debugfs_create_file("codecov_entry", S_IRWXU | S_IROTH, NULL,
 					NULL, &cov_ops);
-	if (!cov_entry)
+	if (unlikely(!cov_entry))
 		return -1;
 
 	cov_thread_init();

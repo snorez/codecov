@@ -158,6 +158,11 @@ int main(int argc, char *argv[])
 	printf("%d\n", err);
 	printf("%.2lf\n", percent);
 
+	unsigned long path_count;
+	err = cov_path_count(&path_count);
+	printf("%d\n", err);
+	printf("%ld\n", path_count);
+
 	cov_unregister();
 	return 0;
 }

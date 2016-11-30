@@ -28,7 +28,7 @@ static int name_in_cplist(char *name)
 
 /*
  * alloc a new `checkpoint` and initialised with the given arguments
- * @name: the name of this checkpoint
+ * @name: the name of this checkpoint, if use offset, please name it [name]_offxxxx
  * @function: the name of the function will be probed
  * @offset: the offset of the function will be probed
  *
@@ -44,17 +44,17 @@ int checkpoint_add(char *name, char *func, unsigned long offset)
 		return -EEXIST;
 
 	new = kmalloc(sizeof(struct checkpoint), GFP_KERNEL);
-	if (!new)
+	if (unlikely(!new))
 		return -ENOMEM;
 	memset(new, 0, sizeof(struct checkpoint));
 
 	err = -EINVAL;
 	name_len = strlen(name);
-	if (name_len > NAME_LEN_MAX)
+	if (unlikely(name_len > NAME_LEN_MAX))
 		goto err_free;
 	err = -ENOMEM;
 	new->name = kmalloc(name_len+1, GFP_KERNEL);
-	if (!new->name)
+	if (unlikely(!new->name))
 		goto err_free;
 	memset(new->name, 0, name_len+1);
 	memcpy(new->name, name, name_len);
@@ -64,9 +64,9 @@ int checkpoint_add(char *name, char *func, unsigned long offset)
 	 * If the offset not zero, we alloc a kprobe,
 	 * otherwise, we alloc a kretprobe
 	 */
-	if (offset) {
+	if (unlikely(offset)) {
 		new->this_kprobe = kmalloc(sizeof(struct kprobe), GFP_KERNEL);
-		if (!new->this_kprobe)
+		if (unlikely(!new->this_kprobe))
 			goto err_free2;
 		memset(new->this_kprobe, 0, sizeof(struct kprobe));
 
@@ -78,7 +78,7 @@ int checkpoint_add(char *name, char *func, unsigned long offset)
 			goto err_free3;
 	} else {
 		new->this_retprobe = kmalloc(sizeof(struct kretprobe), GFP_KERNEL);
-		if (!new->this_retprobe)
+		if (unlikely(!new->this_retprobe))
 			goto err_free2;
 		memset(new->this_retprobe, 0, sizeof(struct kretprobe));
 
@@ -94,6 +94,7 @@ int checkpoint_add(char *name, char *func, unsigned long offset)
 
 	write_lock(&cproot_rwlock);
 	list_add_tail(&new->siblings, &cproot);
+	INIT_LIST_HEAD(&new->caller);
 	write_unlock(&cproot_rwlock);
 	return 0;
 
@@ -107,15 +108,20 @@ err_free:
 	return err;
 }
 
+static void checkpoint_caller_cleanup(struct checkpoint *cp)
+{
+	struct checkpoint_caller *tmp, *next;
+
+	list_for_each_entry_safe(tmp, next, &cp->caller, caller_list) {
+		list_del(&tmp->caller_list);
+		kfree(tmp->name);
+	}
+	INIT_LIST_HEAD(&cp->caller);
+}
+
 void checkpoint_del(char *name)
 {
 	struct checkpoint *tmp;
-
-	/*
-	 * TODO: need to check the target checkpoint is not in cphit_root
-	 * if does, then we may just remove the target checkpoint in cphit_root
-	 */
-
 
 	/*
 	 * XXX:here we do not need list_for_each_entry_safe,
@@ -126,8 +132,9 @@ void checkpoint_del(char *name)
 		if ((strlen(name) == strlen(tmp->name)) &&
 			!strcmp(tmp->name, name)) {
 			list_del(&tmp->siblings);
+			checkpoint_caller_cleanup(tmp);
 
-			if (tmp->this_kprobe) {
+			if (unlikely(tmp->this_kprobe)) {
 				unregister_kprobe(tmp->this_kprobe);
 				kfree(tmp->this_kprobe);
 			} else {
@@ -151,7 +158,8 @@ void checkpoint_restart(void)
 	write_lock(&cproot_rwlock);
 	list_for_each_entry_safe(tmp, next, &cproot, siblings) {
 		list_del(&tmp->siblings);
-		if (tmp->this_kprobe) {
+		checkpoint_caller_cleanup(tmp);
+		if (unlikely(tmp->this_kprobe)) {
 			unregister_kprobe(tmp->this_kprobe);
 			kfree(tmp->this_kprobe);
 		} else {
@@ -189,6 +197,22 @@ unsigned long checkpoint_count(void)
 	read_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings)
 		num++;
+	read_unlock(&cproot_rwlock);
+
+	return num;
+}
+
+unsigned long path_count(void)
+{
+	unsigned long num = 0;
+	struct checkpoint *tmp;
+	struct checkpoint_caller *tmp_caller;
+
+	read_lock(&cproot_rwlock);
+	list_for_each_entry(tmp, &cproot, siblings) {
+		list_for_each_entry(tmp_caller, &tmp->caller, caller_list)
+			num++;
+	}
 	read_unlock(&cproot_rwlock);
 
 	return num;

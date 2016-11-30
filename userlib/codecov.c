@@ -3,7 +3,7 @@
 const static char *cov_file = "/sys/kernel/debug/codecov_entry";
 static int cov_fd;
 
-int cov_register(void)
+int cov_register(unsigned long id)
 {
 	int err = 0;
 
@@ -11,7 +11,7 @@ int cov_register(void)
 	if (cov_fd == -1)
 		return -1;
 
-	err = ioctl(cov_fd, COV_REGISTER, 0);
+	err = ioctl(cov_fd, COV_REGISTER, id);
 	if (err == -1) {
 		close(cov_fd);
 		cov_fd = -1;
@@ -96,4 +96,9 @@ int cov_get_buffer(char *buffer, size_t len)
 	bu.len = len;
 
 	return ioctl(cov_fd, COV_GET_BUFFER, (unsigned long)&bu);
+}
+
+int cov_path_count(unsigned long *count)
+{
+	return ioctl(cov_fd, COV_PATH_COUNT, count);
 }

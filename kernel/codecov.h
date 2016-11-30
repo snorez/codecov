@@ -7,7 +7,6 @@
 #include <linux/kprobes.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
-#include <linux/kallsyms.h>
 #include <linux/file.h>
 #include <linux/debugfs.h>
 #include <linux/err.h>
@@ -29,5 +28,6 @@
 #define COV_REGISTER		_IOWR(COV_IOC_MAGIC, 5, unsigned long)
 #define COV_UNREGISTER		_IOWR(COV_IOC_MAGIC, 6, unsigned long)
 #define COV_GET_BUFFER		_IOWR(COV_IOC_MAGIC, 7, unsigned long)
+#define COV_PATH_COUNT		_IOWR(COV_IOC_MAGIC, 8, unsigned long)
 
 #endif

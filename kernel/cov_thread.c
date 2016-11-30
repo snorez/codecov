@@ -24,23 +24,24 @@ void cov_thread_init(void)
 	rwlock_init(&task_list_rwlock);
 }
 
-int cov_thread_add(void)
+int cov_thread_add(unsigned long id)
 {
 	struct task_struct *task = current;
 	struct cov_thread *new;
 
-	if (task_in_list(task))
+	if (unlikely(task_in_list(task)))
 		return -EEXIST;
 
 	new = kmalloc(sizeof(*new), GFP_KERNEL);
-	if (!new)
+	if (unlikely(!new))
 		return -ENOMEM;
 	memset(new, 0, sizeof(*new));
 
 	new->task = task;
+	new->sample_id = id;
 
 	new->buffer = kmalloc(THREAD_BUFFER_SIZE, GFP_KERNEL);
-	if (!new->buffer) {
+	if (unlikely(!new->buffer)) {
 		kfree(new);
 		return -ENOMEM;
 	}

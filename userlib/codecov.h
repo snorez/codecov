@@ -17,6 +17,7 @@
 #define COV_REGISTER		_IOWR(COV_IOC_MAGIC, 5, unsigned long)
 #define COV_UNREGISTER		_IOWR(COV_IOC_MAGIC, 6, unsigned long)
 #define COV_GET_BUFFER		_IOWR(COV_IOC_MAGIC, 7, unsigned long)
+#define COV_PATH_COUNT		_IOWR(COV_IOC_MAGIC, 8, unsigned long)
 
 struct checkpoint {
 	size_t name_len;
@@ -38,8 +39,9 @@ extern int get_numhit(unsigned long *num_hit);
 extern int get_numtotal(unsigned long *num_total);
 extern int get_coverage(double *percent);
 extern int checkpoint_restart(void);
-extern int cov_register(void);
+extern int cov_register(unsigned long id);
 extern int cov_unregister(void);
 extern int cov_get_buffer(char *buffer, size_t len);
+extern int cov_path_count(unsigned long *count);
 
 #endif
