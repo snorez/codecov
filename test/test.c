@@ -108,10 +108,9 @@ char *func_to_probe[] = {
 int main(int argc, char *argv[])
 {
 	int err, i;
-	char *func;
-	cov_register();
-	char *pid0_to_read = "/home/test/Desktop/ofs/merge/l0.txt";
-	char *pid1_to_read = "/home/test/Desktop/ofs/merge/u0.txt";
+	cov_register(0);
+	char *pid0_to_read = "/home/zerons/Desktop/ofs/merge/l0.txt";
+	char *pid1_to_read = "/home/zerons/Desktop/ofs/merge/u0.txt";
 
 	for (i = 0; i < sizeof(func_to_probe)/sizeof(char *); i++) {
 		err = checkpoint_add(func_to_probe[i], func_to_probe[i], 0);
@@ -130,7 +129,7 @@ int main(int argc, char *argv[])
 	if ((pid = fork()) < 0) {
 		perror("fork");
 	} else if (pid == 0) {
-		cov_register();
+		cov_register(1);
 		int fd = open(pid1_to_read, O_RDONLY);
 		if (fd == -1)
 			perror("open pid1_to_read");

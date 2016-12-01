@@ -114,7 +114,7 @@ static void checkpoint_caller_cleanup(struct checkpoint *cp)
 
 	list_for_each_entry_safe(tmp, next, &cp->caller, caller_list) {
 		list_del(&tmp->caller_list);
-		kfree(tmp->name);
+		kfree(tmp);
 	}
 	INIT_LIST_HEAD(&cp->caller);
 }
