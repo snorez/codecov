@@ -8,8 +8,8 @@
 #include <linux/rwlock.h>
 #include <linux/kallsyms.h>
 
-#define NAME_LEN_MAX	32
-#define FUNC_LEN_MAX	1024
+#define NAME_LEN_MAX	KSYM_NAME_LEN
+#define FUNC_LEN_MAX	KSYM_NAME_LEN
 #define RETPROBE_MAXACTIVE	16
 
 
