@@ -3,6 +3,10 @@
 const static char *cov_file = "/sys/kernel/debug/codecov_entry";
 static int cov_fd;
 
+/*
+ * cov_register: register current process
+ * @id: the sample id for the testing file, 0 if do not care
+ */
 int cov_register(unsigned long id)
 {
 	int err = 0;
@@ -27,6 +31,13 @@ int cov_unregister(void)
 	return 0;
 }
 
+/*
+ * checkpoint_add: add a new probe point `func`
+ * if return EINVAL, that means
+ *	@name too long
+ *	@func too long
+ *	the register_*probe failed, Documentations/kprobes.txt for more detail
+ */
 int checkpoint_add(char *name, char *func, unsigned long offset)
 {
 	struct checkpoint tmp;
@@ -89,6 +100,7 @@ int checkpoint_restart(void)
 	return (err == -1) ? -1 : 0;
 }
 
+/* get kernel log msg buffer, len usually equal THREAD_BUFFER_SIZE */
 int cov_get_buffer(char *buffer, size_t len)
 {
 	struct buffer_user bu;
