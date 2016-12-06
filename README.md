@@ -18,11 +18,23 @@ registered. If the probed functions triggered, but current thread not registered
 then we do nothing.
 
 # Usage
-+ modify your /etc/fstab, add this line
-	debugfs	/sys/kernel/debug	debugfs	mode=0755,noauto	0	0
-+ insmod your target kernel module and this kernel module
-+ write a program to add checkpoints
-+ run your tests, and check coverage
++ ### kernel module
+	+ modify your /etc/fstab, add this line
+		debugfs	/sys/kernel/debug	debugfs	mode=0755,noauto	0	0
+	+ insmod your target kernel module and this kernel module
++ ### user library
+	+ write a program to add checkpoints
+	the program(each [child] tests and checkpint_add process) should do
+		```c
+		cov_register(sample_id);
+		...
+		cov_unregister();
+		```
+	+ run your tests, and check coverage
+	+ `cov_unregister` doesn't unregister all probed points, rmmod does
+	`cov_register` register current process
+	then we should use `checkpoint_add`, and then we could exit the current
+	process (which is preferred) or do the tests.
 
 # Notice
 + you can't probe a static function yet, cause the symbol couldn't be found
@@ -34,13 +46,13 @@ then we do nothing.
 + till code coverage gets to 100%
 + usespace support libs
 + multiple thread support
-
-# things doesn't do yet
 + also mutiple thread err message
-+ subpath in functions
-+ output the path map
 + new path should also be something like(A->B C->D, then A->C B->D)
 + some error message should also be provide to user space
+
+# things doesn't do yet
++ subpath in functions
++ output the path map
 + ...
 
 # things can't not be done
