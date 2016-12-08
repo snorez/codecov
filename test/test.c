@@ -162,6 +162,12 @@ int main(int argc, char *argv[])
 	printf("%d\n", err);
 	printf("%ld\n", path_count);
 
+	err = get_numhit(&path_count);
+	printf("numhit: %ld\n", path_count);
+
+	err = get_numtotal(&path_count);
+	printf("numtotal: %ld\n", path_count);
+
 	cov_unregister();
 	return 0;
 }
