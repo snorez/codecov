@@ -211,9 +211,11 @@ static int do_checkpoint_add(char *name, char *func, unsigned long offset)
 			goto err_free3;
 	}
 
+	rwlock_init(&new->caller_rwlock);
+	INIT_LIST_HEAD(&new->caller);
+
 	write_lock(&cproot_rwlock);
 	list_add_tail(&new->siblings, &cproot);
-	INIT_LIST_HEAD(&new->caller);
 	write_unlock(&cproot_rwlock);
 	return 0;
 
@@ -239,11 +241,13 @@ static void checkpoint_caller_cleanup(struct checkpoint *cp)
 {
 	struct checkpoint_caller *tmp, *next;
 
+	write_lock(&cp->caller_rwlock);
 	list_for_each_entry_safe(tmp, next, &cp->caller, caller_list) {
 		list_del(&tmp->caller_list);
 		kfree(tmp);
 	}
 	INIT_LIST_HEAD(&cp->caller);
+	write_unlock(&cp->caller_rwlock);
 }
 
 void checkpoint_del(char *name)
@@ -337,8 +341,10 @@ unsigned long path_count(void)
 
 	read_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
+		read_lock(&tmp->caller_rwlock);
 		list_for_each_entry(tmp_caller, &tmp->caller, caller_list)
 			num++;
+		read_unlock(&tmp->caller_rwlock);
 	}
 	read_unlock(&cproot_rwlock);
 

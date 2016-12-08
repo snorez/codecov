@@ -59,6 +59,7 @@ enum jxx_2 {
 struct checkpoint {
 	struct list_head siblings;
 	struct list_head caller;	/* root of who called this probed point */
+	rwlock_t caller_rwlock;
 
 	unsigned long hit;		/* numbers been hit */
 	char *name;			/* checkpoint's specific name */

@@ -12,12 +12,17 @@
 static int address_in_caller(struct checkpoint *cp, unsigned long address)
 {
 	struct checkpoint_caller *tmp;
+	int err = 0;
 
+	read_lock(&cp->caller_rwlock);
 	list_for_each_entry(tmp, &cp->caller, caller_list) {
-		if (address == tmp->address)
-			return 1;
+		if (address == tmp->address) {
+			err = 1;
+			break;
+		}
 	}
-	return 0;
+	read_unlock(&cp->caller_rwlock);
+	return err;
 }
 
 /*
@@ -74,7 +79,11 @@ static int checkpoint_caller_add(struct checkpoint *cp, unsigned long address)
 	if (unlikely(err))
 		memset(new->name, 0, KSYM_NAME_LEN);
 	new->address = address;
+
+	write_lock(&cp->caller_rwlock);
 	list_add_tail(&new->caller_list, &cp->caller);
+	write_unlock(&cp->caller_rwlock);
+
 	return 0;
 }
 
