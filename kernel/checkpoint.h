@@ -7,11 +7,54 @@
 #include <linux/types.h>
 #include <linux/rwlock.h>
 #include <linux/kallsyms.h>
+#include <asm/insn.h>
 
 #define NAME_LEN_MAX	KSYM_NAME_LEN
 #define FUNC_LEN_MAX	KSYM_NAME_LEN
 #define RETPROBE_MAXACTIVE	16
 
+enum jxx_1 {
+	JO_OPC0		= 0x70,	//Jbs
+	JNO_OPC0,		//Jbs
+	JB_OPC0,		//Jbs
+	JNB_OPC0,		//Jbs
+	JE_OPC0,		//Jbs
+	JNE_OPC0,		//Jbs
+	JBE_OPC0,		//Jbs
+	JA_OPC0,		//Jbs
+	JS_OPC0,		//Jbs
+	JNS_OPC0,		//Jbs
+	JPE_OPC0,		//Jbs
+	JPO_OPC0,		//Jbs
+	JL_OPC0,		//Jbs
+	JGE_OPC0,		//Jbs
+	JLE_OPC0,		//Jbs
+	JG_OPC0		= 0x7f,	//Jbs
+	JCXZ_OPC	= 0xe3,	//Jbs jump if ecx/rcx = 0
+	//JMP_OPC	= 0xe9,	//Jvds
+	//JMPS_OPC	= 0xeb,	//Jvds
+	//JMPF_OPC	= 0xea, //invalid in 64-bit mode
+};
+
+enum jxx_2 {
+	TWO_OPC		= 0x0f,
+	JO_OPC1		= 0x80,	//Jvds
+	JNO_OPC1,		//Jvds
+	JB_OPC1,		//Jvds
+	JNB_OPC1,		//Jvds
+	JE_OPC1,		//Jvds
+	JNE_OPC1,		//Jvds
+	JBE_OPC1,		//Jvds
+	JA_OPC1,		//Jvds
+	JS_OPC1,		//Jvds
+	JNS_OPC1,		//Jvds
+	JPE_OPC1,		//Jvds
+	JPO_OPC1,		//Jvds
+	JL_OPC1,		//Jvds
+	JGE_OPC1,		//Jvds
+	JLE_OPC1,		//Jvds
+	JG_OPC1		= 0x8f,	//Jvds
+};
 
 struct checkpoint {
 	struct list_head siblings;

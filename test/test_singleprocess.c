@@ -108,6 +108,7 @@ int main(int argc, char *argv[])
 {
 	int err, i;
 	char *func;
+	unsigned long total;
 	cov_register();
 
 	for (i = 0; i < sizeof(func_to_probe)/sizeof(char *); i++) {
@@ -115,6 +116,11 @@ int main(int argc, char *argv[])
 		if (err == -1)
 			printf("checkpoint_add %s err: %s\n", func_to_probe[i],
 				strerror(errno));
+		err = get_numtotal(&total);
+		if (err == -1)
+			printf("get_numtotal err: %s\n", strerror(errno));
+		else
+			printf("checkpoints: %lx\n", total);
 	}
 
 	getchar();

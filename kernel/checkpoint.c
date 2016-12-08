@@ -26,6 +26,125 @@ static int name_in_cplist(char *name)
 	return 0;
 }
 
+int (*lookup_symbol_attrs_f)(unsigned long, unsigned long *,
+			     unsigned long *, char *, char *);
+void (*insn_init_f)(struct insn *, const void *, int, int);
+void (*insn_get_length_f)(struct insn *);
+static int do_checkpoint_add(char *name, char *func, unsigned long offset);
+
+static void do_set_jxx_probe(char *func, unsigned long base,
+			     struct insn *insn, int opcs)
+{
+	void *addr = (char *)insn->kaddr;
+	void *next_addr = (char *)addr + insn->length;
+	void *addr_jmp;
+	char name_tmp[KSYM_NAME_LEN];
+
+	/*
+	 * TODO: where this instruction jump to?
+	 * if @opcs == 1, then Jbs
+	 * if @opcs == 2, then Jvds, four bytes
+	 * calculate the next address and the jump address
+	 */
+	signed int offset;
+
+	if (opcs == 1) {
+		offset = (signed int)(insn->immediate.bytes[0]);
+		addr_jmp = (void *)((unsigned long)next_addr + offset);
+	} else if (opcs == 2) {
+		switch (insn->immediate.nbytes) {
+		case 1:
+			offset = (signed int)insn->immediate.bytes[0];
+			break;
+		case 2:
+			offset = *(signed short *)(insn->immediate.bytes);
+			break;
+		case 4:
+			offset = *(signed int *)(insn->immediate.bytes);
+			break;
+		default:
+			offset = 0;
+		}
+		addr_jmp = (void *)((unsigned long)next_addr + offset);
+	} else
+		return;
+
+	if ((next_addr <= (void *)base) || (addr_jmp <= (void *)base))
+		return;
+
+	/* now we have two addresses: next_addr, addr_jmp */
+	memset(name_tmp, 0, KSYM_NAME_LEN);
+	snprintf(name_tmp, KSYM_NAME_LEN, "%s#%lx", func,
+			(unsigned long)next_addr-base);
+	do_checkpoint_add(name_tmp, func, (unsigned long)next_addr-base);
+	memset(name_tmp, 0, KSYM_NAME_LEN);
+	snprintf(name_tmp, KSYM_NAME_LEN, "%s#%lx", func,
+			(unsigned long)addr_jmp-base);
+	do_checkpoint_add(name_tmp, func, (unsigned long)addr_jmp-base);
+	return;
+}
+
+/*
+ * do_auto_add: parse the @func, and add checkpoint automatic
+ * @func: the function need to parse
+ * we try our best to add more checkpoints
+ * as of now, only support X86_64
+ */
+static void do_auto_add(char *func)
+{
+#ifdef CONFIG_X86_64
+	char name[KSYM_NAME_LEN], modname[KSYM_NAME_LEN];
+	unsigned long addr, size, offset, i = 0;
+	struct insn insn;
+	int err;
+
+	addr = (unsigned long)kallsyms_lookup_name(func);
+	if (unlikely(!addr))
+		return;
+
+	if (unlikely(!lookup_symbol_attrs_f))
+		lookup_symbol_attrs_f = (void *)kallsyms_lookup_name(
+						"lookup_symbol_attrs");
+	if (unlikely(!lookup_symbol_attrs_f))
+		return;
+	if (unlikely(!insn_init_f))
+		insn_init_f = (void *)kallsyms_lookup_name("insn_init");
+	if (unlikely(!insn_init_f))
+		return;
+	if (unlikely(!insn_get_length_f))
+		insn_get_length_f = (void *)kallsyms_lookup_name(
+						"insn_get_length");
+	if (unlikely(!insn_get_length_f))
+		return;
+
+	err = lookup_symbol_attrs_f(addr, &size, &offset, modname, name);
+	if (err)
+		return;
+
+	while (i < size) {
+		unsigned char opcode_bytes, opc0, opc1;
+
+		insn_init_f(&insn, (void *)(addr+i), MAX_INSN_SIZE, 1);
+		insn_get_length_f(&insn);
+		if (!insn.length)
+			break;
+
+		opcode_bytes = insn.opcode.nbytes;
+		opc0 = insn.opcode.bytes[0];
+		opc1 = insn.opcode.bytes[1];
+
+		if ((opcode_bytes == 1) && ((opc0 == JCXZ_OPC) ||
+					((opc0 <= JG_OPC0) && (opc0 >= JO_OPC0))))
+			do_set_jxx_probe(func, (unsigned long)addr, &insn, 1);
+		else if ((opcode_bytes == 2) && (opc0 == TWO_OPC) &&
+				((opc1 <= JG_OPC1) && (opc1 >= JO_OPC1)))
+			do_set_jxx_probe(func, (unsigned long)addr, &insn, 2);
+		i += insn.length;
+	}
+#endif
+	return;
+}
+
 /*
  * alloc a new `checkpoint` and initialised with the given arguments
  * @name: the name of this checkpoint, if use offset, please name it [name]_offxxxx
@@ -34,7 +153,7 @@ static int name_in_cplist(char *name)
  *
  * we should check if the name is already exist in the cproot;
  */
-int checkpoint_add(char *name, char *func, unsigned long offset)
+static int do_checkpoint_add(char *name, char *func, unsigned long offset)
 {
 	int err;
 	struct checkpoint *new;
@@ -105,6 +224,14 @@ err_free2:
 	kfree(new->name);
 err_free:
 	kfree(new);
+	return err;
+}
+
+int checkpoint_add(char *name, char *func, unsigned long offset)
+{
+	int err = do_checkpoint_add(name, func, offset);
+	if (!err && !offset)
+		do_auto_add(func);
 	return err;
 }
 
