@@ -49,9 +49,9 @@ then we do nothing.
 + also mutiple thread err message
 + new path should also be something like(A->B C->D, then A->C B->D)
 + some error message should also be provide to user space
++ subpath in functions. only support x86_64
 
 # things doesn't do yet
-+ subpath in functions
 + output the path map
 + ...
 
