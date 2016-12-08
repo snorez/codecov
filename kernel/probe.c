@@ -26,11 +26,11 @@ static int address_in_caller(struct checkpoint *cp, unsigned long address)
  * alloc a new structure checkpoint_caller
  * search the task_list_root to get/set the sample_id,
  * lookup_symbol_name to set the function name
+ * if @address == 0, then we take the value of current_thread.prev_addr
  */
 static int checkpoint_caller_add(struct checkpoint *cp, unsigned long address)
 {
 	/*
-	 * TODO:
 	 * check if the address already exists in cp->caller
 	 * add a structure checkpoint_caller
 	 */
@@ -39,14 +39,7 @@ static int checkpoint_caller_add(struct checkpoint *cp, unsigned long address)
 	struct cov_thread *ct = NULL, *tmp;
 	int (*get_symbol_via_address)(unsigned long, char *);
 	int err;
-
-	if (address_in_caller(cp, address))
-		return -1;
-
-	new = kmalloc(sizeof(*new), GFP_KERNEL);
-	if (unlikely(!new))
-		return -2;
-	memset(new, 0, sizeof(*new));
+	unsigned long id;
 
 	read_lock(&task_list_rwlock);
 	list_for_each_entry(tmp, &task_list_root, list) {
@@ -58,11 +51,22 @@ static int checkpoint_caller_add(struct checkpoint *cp, unsigned long address)
 	if (unlikely(!ct)) {
 		/* may never happen */
 		read_unlock(&task_list_rwlock);
-		kfree(new);
 		return -2;
-	} else
-		new->sample_id = ct->sample_id;
+	} else {
+		id = ct->sample_id;
+		if (!address)
+			address = ct->prev_addr;
+	}
 	read_unlock(&task_list_rwlock);
+
+	if (address_in_caller(cp, address))
+		return -1;
+
+	new = kmalloc(sizeof(*new), GFP_KERNEL);
+	if (unlikely(!new))
+		return -2;
+	memset(new, 0, sizeof(*new));
+	new->sample_id = id;
 
 	get_symbol_via_address =
 			(void *)kallsyms_lookup_name("lookup_symbol_name");
@@ -75,12 +79,13 @@ static int checkpoint_caller_add(struct checkpoint *cp, unsigned long address)
 }
 
 /*
- * TODO
- * for point in functions. do not care now
+ * for checkpoints in functions.
  */
 int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 {
 	struct checkpoint *tmp;
+	struct cov_thread *ct;
+	int err;
 
 	if (!task_in_list(current))
 		return 0;
@@ -93,27 +98,52 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 			tmp->hit++;
 			if (unlikely(!tmp->hit))
 				tmp->hit = 1;
+
+			err = checkpoint_caller_add(tmp, 0);
+			if (unlikely(err == -2))
+				ctbuf_print("ERR: checkpoint_caller_add: %s\n",
+					    tmp->name);
+			else if (!err)
+				ctbuf_print("NEW PATH: %s\n", tmp->name);
 			break;
 		}
 	}
 	read_unlock(&cproot_rwlock);
 
+	write_lock(&task_list_rwlock);
+	list_for_each_entry(ct, &task_list_root, list) {
+		if (ct->task == current) {
+			ct->prev_addr = (unsigned long)kp->addr;
+			break;
+		}
+	}
+	write_unlock(&task_list_rwlock);
+
 	return 0;
 }
 
 /*
- * TODO:
  * things we do when the function returns
  */
 int cp_default_ret_hdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
+	struct cov_thread *ct;
 	if (!task_in_list(current))
 		return 0;
+
+	write_lock(&task_list_rwlock);
+	list_for_each_entry(ct, &task_list_root, list) {
+		if (ct->task == current) {
+			ct->prev_addr = (unsigned long)ri->ret_addr;
+			break;
+		}
+	}
+	write_unlock(&task_list_rwlock);
+
 	return 0;
 }
 
 /*
- * TODO
  * things we do when the function get called
  *
  * if current process has not registered, then return
@@ -126,6 +156,7 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
 	/* before the function called. XXX:should always return 0 */
 	struct checkpoint *tmp;
+	struct cov_thread *ct;
 	int err;
 
 	if (!task_in_list(current))
@@ -156,6 +187,15 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 		}
 	}
 	read_unlock(&cproot_rwlock);
+
+	write_lock(&task_list_rwlock);
+	list_for_each_entry(ct, &task_list_root, list) {
+		if (ct->task == current) {
+			ct->prev_addr = regs->ip;
+			break;
+		}
+	}
+	write_unlock(&task_list_rwlock);
 
 	return 0;
 }

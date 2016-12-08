@@ -18,6 +18,7 @@ struct cov_thread {
 	struct task_struct *task;
 	char *buffer;
 	unsigned long sample_id;
+	unsigned long prev_addr;	/* for kprobe, not kretprobe */
 };
 extern struct list_head task_list_root;
 extern rwlock_t task_list_rwlock;
