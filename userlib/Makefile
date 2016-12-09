@@ -5,3 +5,4 @@ codecov.so: codecov.c codecov.h
 
 clean:
 	rm -rf *.so
+	rm -rf core

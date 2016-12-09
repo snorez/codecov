@@ -351,6 +351,208 @@ unsigned long path_count(void)
 	return num;
 }
 
+/*
+ * get_next_unhit_func, get_next_unhit_cp, get_path_map
+ * SHOULD check if current process is the only process running now.
+ * and hold the task_list_rwlock until the functions return
+ */
+int get_next_unhit_func(char __user *buf, size_t len)
+{
+	int err, num = 0, found = 0;
+	size_t name_len;
+	struct cov_thread *ct;
+	struct checkpoint *cp;
+
+	err = -EBUSY;
+	read_lock(&task_list_rwlock);
+	list_for_each_entry(ct, &task_list_root, list) {
+		num++;
+		if (num > 1)
+			goto unlock_ret;
+	}
+	err = -EINVAL;
+	if (!num)
+		goto unlock_ret;
+
+	read_lock(&cproot_rwlock);
+	list_for_each_entry(cp, &cproot, siblings) {
+		if (!cp->hit)
+			if (!strchr(cp->name, '#')) {
+				found = 1;
+				break;
+			}
+	}
+	read_unlock(&cproot_rwlock);
+	err = -ENOENT;
+	if (!found)
+		goto unlock_ret;
+
+	err = -EINVAL;
+	name_len = strlen(cp->name) + 1;
+	if (len < name_len)
+		goto unlock_ret;
+
+	err = 0;
+	if (copy_to_user(buf, cp->name, name_len))
+		err = -EFAULT;
+
+unlock_ret:
+	read_unlock(&task_list_rwlock);
+	return err;
+}
+
+int get_next_unhit_cp(char __user *buf, size_t len)
+{
+	int err, num = 0, found = 0;
+	size_t name_len;
+	struct cov_thread *ct;
+	struct checkpoint *cp;
+
+	err = -EBUSY;
+	read_lock(&task_list_rwlock);
+	list_for_each_entry(ct, &task_list_root, list) {
+		num++;
+		if (num > 1)
+			goto unlock_ret;
+	}
+	err = -EINVAL;
+	if (!num)
+		goto unlock_ret;
+
+	read_lock(&cproot_rwlock);
+	list_for_each_entry(cp, &cproot, siblings) {
+		if (!cp->hit) {
+			found = 1;
+			break;
+		}
+	}
+	read_unlock(&cproot_rwlock);
+	err = -ENOENT;
+	if (!found)
+		goto unlock_ret;
+
+	err = -EINVAL;
+	name_len = strlen(cp->name) + 1;
+	if (len < name_len)
+		goto unlock_ret;
+
+	err = 0;
+	if (copy_to_user(buf, cp->name, name_len))
+		err = -EFAULT;
+
+unlock_ret:
+	read_unlock(&task_list_rwlock);
+	return err;
+}
+
+/*
+ * if *len is not enough, we return -ERETY, userspace should check the new len
+ */
+int get_path_map(char __user *buf, size_t __user *len)
+{
+	size_t len_need = 0, len_tmp, copid = 0;
+	int err, num = 0;
+	struct cov_thread *ct;
+	struct checkpoint *cp;
+	char *buf_tmp = NULL;
+
+	err = -EBUSY;
+	read_lock(&task_list_rwlock);
+	list_for_each_entry(ct, &task_list_root, list) {
+		num++;
+		if (num > 1)
+			goto unlock_ret;
+	}
+	err = -EINVAL;
+	if (!num)
+		goto unlock_ret;
+
+	err = -EFAULT;
+	if (copy_from_user(&len_tmp, len, sizeof(size_t)))
+		goto unlock_ret;
+
+	/* use +: as the seperator, cp->name+caller_name+caller_addr+:NEXT */
+	read_lock(&cproot_rwlock);
+	list_for_each_entry(cp, &cproot, siblings) {
+		struct checkpoint_caller *cpcaller;
+
+		if (cp->name)
+			len_need += strlen(cp->name);
+		else
+			len_need += strlen("NULL");
+
+		read_lock(&cp->caller_rwlock);
+		list_for_each_entry(cpcaller, &cp->caller, caller_list) {
+			len_need += 1;		/* for + */
+			if (cpcaller->name[0])
+				len_need += strlen(cpcaller->name);
+			else
+				len_need += strlen("NULL");
+			len_need += 16 + 2;	/* for 0x */
+		}
+		read_unlock(&cp->caller_rwlock);
+		len_need += 1;	/* for : */
+	}
+	read_unlock(&cproot_rwlock);
+	len_need += 1;	/* for \0 */
+
+	err = -EAGAIN;
+	if (len_tmp < len_need) {
+		if (copy_to_user(len, &len_need, sizeof(size_t)))
+			err = -EFAULT;
+		goto unlock_ret;
+	}
+
+	err = -ENOMEM;
+	buf_tmp = kmalloc(len_need, GFP_KERNEL);
+	if (!buf_tmp)
+		goto unlock_ret;
+	memset(buf_tmp, 0, len_need);
+
+	read_lock(&cproot_rwlock);
+	list_for_each_entry(cp, &cproot, siblings) {
+		struct checkpoint_caller *cpcaller;
+
+		if (cp->name) {
+			memcpy(buf_tmp+copid, cp->name, strlen(cp->name));
+			copid += strlen(cp->name);
+		} else {
+			memcpy(buf_tmp,"NULL", 4);
+			copid += 4;
+		}
+
+		read_lock(&cp->caller_rwlock);
+		list_for_each_entry(cpcaller, &cp->caller, caller_list) {
+			memcpy(buf_tmp+copid, "+", 1);
+			copid += 1;
+
+			if (cpcaller->name[0]) {
+				memcpy(buf_tmp+copid, cpcaller->name,
+						strlen(cpcaller->name));
+				copid += strlen(cpcaller->name);
+			} else {
+				memcpy(buf_tmp+copid, "NULL", 4);
+				copid += 4;
+			}
+			sprintf(buf_tmp+copid, "0x%016lx", cpcaller->address);
+			copid += 16 + 2;
+		}
+		read_unlock(&cp->caller_rwlock);
+		memcpy(buf_tmp+copid, ":", 1);
+		copid += 1;
+	}
+	read_unlock(&cproot_rwlock);
+
+	err = 0;
+	if (copy_to_user(buf, buf_tmp, copid+1))
+		err = -EFAULT;
+
+unlock_ret:
+	read_unlock(&task_list_rwlock);
+	kfree(buf_tmp);
+	return err;
+}
+
 void checkpoint_exit(void)
 {
 	checkpoint_restart();

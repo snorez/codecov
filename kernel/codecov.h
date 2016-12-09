@@ -29,5 +29,8 @@
 #define COV_UNREGISTER		_IOWR(COV_IOC_MAGIC, 6, unsigned long)
 #define COV_GET_BUFFER		_IOWR(COV_IOC_MAGIC, 7, unsigned long)
 #define COV_PATH_COUNT		_IOWR(COV_IOC_MAGIC, 8, unsigned long)
+#define COV_NEXT_UNHIT_FUNC	_IOWR(COV_IOC_MAGIC, 9, unsigned long)
+#define COV_NEXT_UNHIT_CP	_IOWR(COV_IOC_MAGIC, 10, unsigned long)
+#define COV_PATH_MAP		_IOWR(COV_IOC_MAGIC, 11, unsigned long)
 
 #endif

@@ -18,6 +18,9 @@
 #define COV_UNREGISTER		_IOWR(COV_IOC_MAGIC, 6, unsigned long)
 #define COV_GET_BUFFER		_IOWR(COV_IOC_MAGIC, 7, unsigned long)
 #define COV_PATH_COUNT		_IOWR(COV_IOC_MAGIC, 8, unsigned long)
+#define COV_NEXT_UNHIT_FUNC	_IOWR(COV_IOC_MAGIC, 9, unsigned long)
+#define COV_NEXT_UNHIT_CP	_IOWR(COV_IOC_MAGIC, 10, unsigned long)
+#define COV_PATH_MAP		_IOWR(COV_IOC_MAGIC, 11, unsigned long)
 
 struct checkpoint {
 	size_t name_len;
@@ -33,6 +36,11 @@ struct buffer_user {
 	size_t len;
 };
 
+struct path_map_user {
+	char *buffer;
+	size_t *len;
+};
+
 extern int checkpoint_add(char *name, char *func, unsigned long offset);
 extern int checkpoint_del(char *name);
 extern int get_numhit(unsigned long *num_hit);
@@ -43,5 +51,8 @@ extern int cov_register(unsigned long id);
 extern int cov_unregister(void);
 extern int cov_get_buffer(char *buffer, size_t len);
 extern int cov_path_count(unsigned long *count);
+extern int get_next_unhit_func(char *buf, size_t len);
+extern int get_next_unhit_cp(char *buf, size_t len);
+extern int get_path_map(char *buf, size_t *len);
 
 #endif

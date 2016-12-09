@@ -106,6 +106,30 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return copy_to_user((void __user *)arg, &res,
 				    sizeof(unsigned long));
 
+	case COV_NEXT_UNHIT_FUNC: {
+		struct buffer_user bu;
+		if (copy_from_user(&bu, (void __user *)arg, sizeof(bu)))
+			return -EFAULT;
+		res = get_next_unhit_func(bu.buffer, bu.len);
+		return res;
+	}
+
+	case COV_NEXT_UNHIT_CP: {
+		struct buffer_user bu;
+		if (copy_from_user(&bu, (void __user *)arg, sizeof(bu)))
+			return -EFAULT;
+		res = get_next_unhit_cp(bu.buffer, bu.len);
+		return res;
+	}
+
+	case COV_PATH_MAP: {
+		struct path_map_user pm_user;
+		if (copy_from_user(&pm_user, (void __user *)arg, sizeof(pm_user)))
+			return -EFAULT;
+		res = get_path_map(pm_user.buffer, pm_user.len);
+		return res;
+	}
+
 	default:
 		return -ENOTSUPP;
 	}

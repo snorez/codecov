@@ -110,6 +110,33 @@ int cov_get_buffer(char *buffer, size_t len)
 	return ioctl(cov_fd, COV_GET_BUFFER, (unsigned long)&bu);
 }
 
+int get_next_unhit_func(char *buf, size_t len)
+{
+	struct buffer_user bu;
+	bu.buffer = buf;
+	bu.len = len;
+
+	return ioctl(cov_fd, COV_NEXT_UNHIT_FUNC, (unsigned long)&bu);
+}
+
+int get_next_unhit_cp(char *buf, size_t len)
+{
+	struct buffer_user bu;
+	bu.buffer = buf;
+	bu.len = len;
+
+	return ioctl(cov_fd, COV_NEXT_UNHIT_CP, (unsigned long)&bu);
+}
+
+int get_path_map(char *buf, size_t *len)
+{
+	struct path_map_user pm_user;
+	pm_user.buffer = buf;
+	pm_user.len = len;
+
+	return ioctl(cov_fd, COV_PATH_MAP, (unsigned long)&pm_user);
+}
+
 int cov_path_count(unsigned long *count)
 {
 	return ioctl(cov_fd, COV_PATH_COUNT, count);

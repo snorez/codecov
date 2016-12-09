@@ -9,3 +9,9 @@
 
 [3]
 	insmod/checkpoint_add/checkpoint_restart/rmmod
+
+[4]
+	insmod/checkpoint_add/do_auto_add/rmmod
+
+[5]
+	insmod/checkpoint_add/do_auto_add/path_map/rmmod
