@@ -13,13 +13,15 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 	case COV_COUNT_HIT:
 		res = checkpoint_get_numhit();
-		return copy_to_user((unsigned long __user *)arg, &res,
-				    sizeof(unsigned long));
+		if (copy_to_user((unsigned long __user *)arg, &res, sizeof(arg)))
+			return -EFAULT;
+		return 0;
 
 	case COV_COUNT_CP:
 		res = checkpoint_count();
-		return copy_to_user((unsigned long __user *)arg, &res,
-				    sizeof(unsigned long));
+		if (copy_to_user((unsigned long __user *)arg, &res, sizeof(arg)))
+			return -EFAULT;
+		return 0;
 
 	case COV_ADD_CP: {
 		struct checkpoint_user new;
@@ -107,31 +109,32 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	case COV_PATH_COUNT:
 		res = path_count();
-		return copy_to_user((void __user *)arg, &res,
-				    sizeof(unsigned long));
+		if (copy_to_user((void __user *)arg, &res, sizeof(arg)))
+			return -EFAULT;
+		return 0;
 
 	case COV_NEXT_UNHIT_FUNC: {
-		struct buffer_user bu;
-		if (copy_from_user(&bu, (void __user *)arg, sizeof(bu)))
+		unsigned long arg_u[3];
+		if (copy_from_user(arg_u, (void __user *)arg, sizeof(arg_u)))
 			return -EFAULT;
-		res = get_next_unhit_func(bu.buffer, bu.len);
-		return res;
+		return get_next_unhit_func((char __user *)arg_u[0],
+					   arg_u[1], arg_u[2]);
 	}
 
 	case COV_NEXT_UNHIT_CP: {
-		struct buffer_user bu;
-		if (copy_from_user(&bu, (void __user *)arg, sizeof(bu)))
+		unsigned long arg_u[3];
+		if (copy_from_user(arg_u, (void __user *)arg, sizeof(arg_u)))
 			return -EFAULT;
-		res = get_next_unhit_cp(bu.buffer, bu.len);
-		return res;
+		return get_next_unhit_cp((char __user *)arg_u[0],
+					 arg_u[1], arg_u[2]);
 	}
 
 	case COV_PATH_MAP: {
-		struct path_map_user pm_user;
-		if (copy_from_user(&pm_user, (void __user *)arg, sizeof(pm_user)))
+		unsigned long arg_u[2];
+		if (copy_from_user(arg_u, (void __user *)arg, sizeof(arg_u)))
 			return -EFAULT;
-		res = get_path_map(pm_user.buffer, pm_user.len);
-		return res;
+		return get_path_map((char __user *)arg_u[0],
+				    (size_t __user *)arg_u[1]);
 	}
 
 	default:

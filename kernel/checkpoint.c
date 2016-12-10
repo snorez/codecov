@@ -356,7 +356,7 @@ unsigned long path_count(void)
  * SHOULD check if current process is the only process running now.
  * and hold the task_list_rwlock until the functions return
  */
-int get_next_unhit_func(char __user *buf, size_t len)
+int get_next_unhit_func(char __user *buf, size_t len, size_t skip)
 {
 	int err, num = 0, found = 0;
 	size_t name_len;
@@ -370,7 +370,7 @@ int get_next_unhit_func(char __user *buf, size_t len)
 		if (num > 1)
 			goto unlock_ret;
 	}
-	err = -EINVAL;
+	err = -ESRCH;
 	if (!num)
 		goto unlock_ret;
 
@@ -378,8 +378,11 @@ int get_next_unhit_func(char __user *buf, size_t len)
 	list_for_each_entry(cp, &cproot, siblings) {
 		if (!cp->hit)
 			if (!strchr(cp->name, '#')) {
-				found = 1;
-				break;
+				if (!skip) {
+					found = 1;
+					break;
+				}
+				skip--;
 			}
 	}
 	read_unlock(&cproot_rwlock);
@@ -401,7 +404,7 @@ unlock_ret:
 	return err;
 }
 
-int get_next_unhit_cp(char __user *buf, size_t len)
+int get_next_unhit_cp(char __user *buf, size_t len, size_t skip)
 {
 	int err, num = 0, found = 0;
 	size_t name_len;
@@ -415,15 +418,18 @@ int get_next_unhit_cp(char __user *buf, size_t len)
 		if (num > 1)
 			goto unlock_ret;
 	}
-	err = -EINVAL;
+	err = -ESRCH;
 	if (!num)
 		goto unlock_ret;
 
 	read_lock(&cproot_rwlock);
 	list_for_each_entry(cp, &cproot, siblings) {
 		if (!cp->hit) {
-			found = 1;
-			break;
+			if (!skip) {
+				found = 1;
+				break;
+			}
+			skip--;
 		}
 	}
 	read_unlock(&cproot_rwlock);
@@ -463,7 +469,7 @@ int get_path_map(char __user *buf, size_t __user *len)
 		if (num > 1)
 			goto unlock_ret;
 	}
-	err = -EINVAL;
+	err = -ESRCH;
 	if (!num)
 		goto unlock_ret;
 

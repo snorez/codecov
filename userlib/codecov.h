@@ -36,11 +36,6 @@ struct buffer_user {
 	size_t len;
 };
 
-struct path_map_user {
-	char *buffer;
-	size_t *len;
-};
-
 extern int checkpoint_add(char *name, char *func, unsigned long offset);
 extern int checkpoint_del(char *name);
 extern int get_numhit(unsigned long *num_hit);
@@ -51,8 +46,8 @@ extern int cov_register(unsigned long id, int is_test_case);
 extern int cov_unregister(void);
 extern int cov_get_buffer(char *buffer, size_t len);
 extern int cov_path_count(unsigned long *count);
-extern int get_next_unhit_func(char *buf, size_t len);
-extern int get_next_unhit_cp(char *buf, size_t len);
+extern int get_next_unhit_func(char *buf, size_t len, size_t skip);
+extern int get_next_unhit_cp(char *buf, size_t len, size_t skip);
 extern int get_path_map(char *buf, size_t *len);
 
 #endif

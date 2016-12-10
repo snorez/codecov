@@ -11,6 +11,6 @@ struct buffer_user {
 };
 
 extern int ctbuf_print(const char *fmt, ...);
-extern long ctbuf_get(char __user *buf, size_t len);
+extern int ctbuf_get(char __user *buf, size_t len);
 
 #endif

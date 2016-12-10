@@ -19,7 +19,7 @@ int cov_register(unsigned long id, int is_test_case)
 
 	arg_tmp[0] = id;
 	arg_tmp[1] = (unsigned long)is_test_case;
-	err = ioctl(cov_fd, COV_REGISTER, (unsigned long)&arg_tmp);
+	err = ioctl(cov_fd, COV_REGISTER, (unsigned long)arg_tmp);
 	if (err == -1) {
 		close(cov_fd);
 		cov_fd = -1;
@@ -114,31 +114,33 @@ int cov_get_buffer(char *buffer, size_t len)
 	return ioctl(cov_fd, COV_GET_BUFFER, (unsigned long)&bu);
 }
 
-int get_next_unhit_func(char *buf, size_t len)
+int get_next_unhit_func(char *buf, size_t len, size_t skip)
 {
-	struct buffer_user bu;
-	bu.buffer = buf;
-	bu.len = len;
+	unsigned long arg_tmp[3];
+	arg_tmp[0] = (unsigned long)buf;
+	arg_tmp[1] = len;
+	arg_tmp[2] = skip;
 
-	return ioctl(cov_fd, COV_NEXT_UNHIT_FUNC, (unsigned long)&bu);
+	return ioctl(cov_fd, COV_NEXT_UNHIT_FUNC, (unsigned long)arg_tmp);
 }
 
-int get_next_unhit_cp(char *buf, size_t len)
+int get_next_unhit_cp(char *buf, size_t len, size_t skip)
 {
-	struct buffer_user bu;
-	bu.buffer = buf;
-	bu.len = len;
+	unsigned long arg_tmp[3];
+	arg_tmp[0] = (unsigned long)buf;
+	arg_tmp[1] = len;
+	arg_tmp[2] = skip;
 
-	return ioctl(cov_fd, COV_NEXT_UNHIT_CP, (unsigned long)&bu);
+	return ioctl(cov_fd, COV_NEXT_UNHIT_CP, (unsigned long)arg_tmp);
 }
 
 int get_path_map(char *buf, size_t *len)
 {
-	struct path_map_user pm_user;
-	pm_user.buffer = buf;
-	pm_user.len = len;
+	unsigned long arg_tmp[2];
+	arg_tmp[0] = (unsigned long)buf;
+	arg_tmp[1] = (unsigned long)len;
 
-	return ioctl(cov_fd, COV_PATH_MAP, (unsigned long)&pm_user);
+	return ioctl(cov_fd, COV_PATH_MAP, (unsigned long)arg_tmp);
 }
 
 int cov_path_count(unsigned long *count)

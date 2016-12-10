@@ -30,22 +30,24 @@ int ctbuf_print(const char *fmt, ...)
 	return i;
 }
 
-long ctbuf_get(char __user *buf, size_t len)
+int ctbuf_get(char __user *buf, size_t len)
 {
 	struct task_struct *task = current;
 	struct cov_thread *ct;
-	long ret = -EINVAL;
+	int err = -ESRCH;
 
 	read_lock(&task_list_rwlock);
 	list_for_each_entry(ct, &task_list_root, list) {
 		if (ct->task == task) {
 			size_t len_ct = strlen(ct->buffer);
 			len = (len < len_ct) ? len : len_ct;
-			ret = copy_to_user(buf, ct->buffer, len);
+			err = 0;
+			if (copy_to_user(buf, ct->buffer, len))
+				err = -EFAULT;
 			break;
 		}
 	}
 	read_unlock(&task_list_rwlock);
 
-	return ret;
+	return err;
 }

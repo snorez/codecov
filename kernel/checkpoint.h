@@ -86,11 +86,6 @@ struct checkpoint_user {
 	unsigned long offset;
 };
 
-struct path_map_user {
-	char __user *buffer;
-	size_t __user *len;
-};
-
 extern int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg);
 extern int cp_default_ret_hdl(struct kretprobe_instance *ri,
 			      struct pt_regs *regs);
@@ -105,8 +100,8 @@ extern void checkpoint_exit(void);
 extern unsigned long checkpoint_get_numhit(void);
 extern unsigned long checkpoint_count(void);
 unsigned long path_count(void);
-extern int get_next_unhit_func(char __user *buf, size_t len);
-extern int get_next_unhit_cp(char __user *buf, size_t len);
+extern int get_next_unhit_func(char __user *buf, size_t len, size_t skip);
+extern int get_next_unhit_cp(char __user *buf, size_t len, size_t skip);
 extern int get_path_map(char __user *buf, size_t __user *len);
 
 #endif
