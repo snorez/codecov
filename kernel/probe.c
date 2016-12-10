@@ -96,7 +96,7 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 	struct cov_thread *ct;
 	int err;
 
-	if (!task_in_list(current))
+	if (!task_is_test_case(current))
 		return 0;
 
 	read_lock(&cproot_rwlock);
@@ -137,7 +137,7 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 int cp_default_ret_hdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
 	struct cov_thread *ct;
-	if (!task_in_list(current))
+	if (!task_is_test_case(current))
 		return 0;
 
 	write_lock(&task_list_rwlock);
@@ -168,7 +168,7 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 	struct cov_thread *ct;
 	int err;
 
-	if (!task_in_list(current))
+	if (!task_is_test_case(current))
 		return 0;
 
 	read_lock(&cproot_rwlock);

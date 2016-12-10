@@ -6,16 +6,20 @@ static int cov_fd;
 /*
  * cov_register: register current process
  * @id: the sample id for the testing file, 0 if do not care
+ * @is_test_case: is this process for test case
  */
-int cov_register(unsigned long id)
+int cov_register(unsigned long id, int is_test_case)
 {
 	int err = 0;
+	unsigned long arg_tmp[2];
 
 	cov_fd = open(cov_file, O_RDONLY);
 	if (cov_fd == -1)
 		return -1;
 
-	err = ioctl(cov_fd, COV_REGISTER, id);
+	arg_tmp[0] = id;
+	arg_tmp[1] = (unsigned long)is_test_case;
+	err = ioctl(cov_fd, COV_REGISTER, (unsigned long)&arg_tmp);
 	if (err == -1) {
 		close(cov_fd);
 		cov_fd = -1;

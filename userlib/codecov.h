@@ -47,7 +47,7 @@ extern int get_numhit(unsigned long *num_hit);
 extern int get_numtotal(unsigned long *num_total);
 extern int get_coverage(double *percent);
 extern int checkpoint_restart(void);
-extern int cov_register(unsigned long id);
+extern int cov_register(unsigned long id, int is_test_case);
 extern int cov_unregister(void);
 extern int cov_get_buffer(char *buffer, size_t len);
 extern int cov_path_count(unsigned long *count);

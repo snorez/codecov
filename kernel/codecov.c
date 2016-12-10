@@ -87,8 +87,12 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		checkpoint_restart();
 		return 0;
 
-	case COV_REGISTER:
-		return cov_thread_add(arg);
+	case COV_REGISTER: {
+		unsigned long arg_u[2];
+		if (copy_from_user(arg_u, (void __user *)arg, sizeof(arg_u)))
+			return -EFAULT;
+		return cov_thread_add(arg_u[0], (int)arg_u[1]);
+	}
 
 	case COV_UNREGISTER:
 		cov_thread_del();
