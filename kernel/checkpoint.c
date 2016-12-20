@@ -30,10 +30,11 @@ int (*lookup_symbol_attrs_f)(unsigned long, unsigned long *,
 			     unsigned long *, char *, char *);
 void (*insn_init_f)(struct insn *, const void *, int, int);
 void (*insn_get_length_f)(struct insn *);
-static int do_checkpoint_add(char *name, char *func, unsigned long offset);
+static int do_checkpoint_add(char *name, char *func, unsigned long offset,
+			     unsigned long level);
 
 static void do_set_jxx_probe(char *func, unsigned long base,
-			     struct insn *insn, int opcs)
+			     struct insn *insn, int opcs, unsigned long level)
 {
 	void *addr = (char *)insn->kaddr;
 	void *next_addr = (char *)addr + insn->length;
@@ -76,11 +77,11 @@ static void do_set_jxx_probe(char *func, unsigned long base,
 	memset(name_tmp, 0, KSYM_NAME_LEN);
 	snprintf(name_tmp, KSYM_NAME_LEN, "%s#%lx", func,
 			(unsigned long)next_addr-base);
-	do_checkpoint_add(name_tmp, func, (unsigned long)next_addr-base);
+	do_checkpoint_add(name_tmp, func, (unsigned long)next_addr-base, level);
 	memset(name_tmp, 0, KSYM_NAME_LEN);
 	snprintf(name_tmp, KSYM_NAME_LEN, "%s#%lx", func,
 			(unsigned long)addr_jmp-base);
-	do_checkpoint_add(name_tmp, func, (unsigned long)addr_jmp-base);
+	do_checkpoint_add(name_tmp, func, (unsigned long)addr_jmp-base, level);
 	return;
 }
 
@@ -90,7 +91,7 @@ static void do_set_jxx_probe(char *func, unsigned long base,
  * we try our best to add more checkpoints
  * as of now, only support X86_64
  */
-static void do_auto_add(char *func)
+static void do_auto_add(char *func, unsigned long level)
 {
 #ifdef CONFIG_X86_64
 	char name[KSYM_NAME_LEN], modname[KSYM_NAME_LEN];
@@ -135,10 +136,12 @@ static void do_auto_add(char *func)
 
 		if ((opcode_bytes == 1) && ((opc0 == JCXZ_OPC) ||
 					((opc0 <= JG_OPC0) && (opc0 >= JO_OPC0))))
-			do_set_jxx_probe(func, (unsigned long)addr, &insn, 1);
+			do_set_jxx_probe(func, (unsigned long)addr, &insn, 1,
+					 level);
 		else if ((opcode_bytes == 2) && (opc0 == TWO_OPC) &&
 				((opc1 <= JG_OPC1) && (opc1 >= JO_OPC1)))
-			do_set_jxx_probe(func, (unsigned long)addr, &insn, 2);
+			do_set_jxx_probe(func, (unsigned long)addr, &insn, 2,
+					 level);
 		i += insn.length;
 	}
 #endif
@@ -153,7 +156,8 @@ static void do_auto_add(char *func)
  *
  * we should check if the name is already exist in the cproot;
  */
-static int do_checkpoint_add(char *name, char *func, unsigned long offset)
+static int do_checkpoint_add(char *name, char *func, unsigned long offset,
+			     unsigned long level)
 {
 	int err;
 	struct checkpoint *new;
@@ -213,6 +217,7 @@ static int do_checkpoint_add(char *name, char *func, unsigned long offset)
 
 	rwlock_init(&new->caller_rwlock);
 	INIT_LIST_HEAD(&new->caller);
+	new->level = level;
 
 	write_lock(&cproot_rwlock);
 	list_add_tail(&new->siblings, &cproot);
@@ -229,11 +234,12 @@ err_free:
 	return err;
 }
 
-int checkpoint_add(char *name, char *func, unsigned long offset)
+int checkpoint_add(char *name, char *func, unsigned long offset,
+		   unsigned long level)
 {
-	int err = do_checkpoint_add(name, func, offset);
+	int err = do_checkpoint_add(name, func, offset, level);
 	if (!err && !offset)
-		do_auto_add(func);
+		do_auto_add(func, level);
 	return err;
 }
 
@@ -351,12 +357,20 @@ unsigned long path_count(void)
 	return num;
 }
 
+static int has_level(struct checkpoint *cp, unsigned long level)
+{
+	if ((level > 64) || (level < 1))
+		return 0;
+	return cp->level & (1UL<<(level-1));
+}
+
 /*
  * get_next_unhit_func, get_next_unhit_cp, get_path_map
  * SHOULD check if current process is the only process running now.
  * and hold the task_list_rwlock until the functions return
  */
-int get_next_unhit_func(char __user *buf, size_t len, size_t skip)
+int get_next_unhit_func(char __user *buf, size_t len, size_t skip,
+			unsigned long level)
 {
 	int err, num = 0, found = 0;
 	size_t name_len;
@@ -378,6 +392,8 @@ int get_next_unhit_func(char __user *buf, size_t len, size_t skip)
 	list_for_each_entry(cp, &cproot, siblings) {
 		if (!cp->hit)
 			if (!strchr(cp->name, '#')) {
+				if (!has_level(cp, level))
+					continue;
 				if (!skip) {
 					found = 1;
 					break;
@@ -404,7 +420,8 @@ unlock_ret:
 	return err;
 }
 
-int get_next_unhit_cp(char __user *buf, size_t len, size_t skip)
+int get_next_unhit_cp(char __user *buf, size_t len, size_t skip,
+		      unsigned long level)
 {
 	int err, num = 0, found = 0;
 	size_t name_len;
@@ -425,6 +442,8 @@ int get_next_unhit_cp(char __user *buf, size_t len, size_t skip)
 	read_lock(&cproot_rwlock);
 	list_for_each_entry(cp, &cproot, siblings) {
 		if (!cp->hit) {
+			if (!has_level(cp, level))
+				continue;
 			if (!skip) {
 				found = 1;
 				break;

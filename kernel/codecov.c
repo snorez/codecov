@@ -55,7 +55,7 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			return -EFAULT;
 		}
 
-		res = checkpoint_add(name, func, new.offset);
+		res = checkpoint_add(name, func, new.offset, new.level);
 		kfree(name);
 		kfree(func);
 		return res;
@@ -114,19 +114,19 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return 0;
 
 	case COV_NEXT_UNHIT_FUNC: {
-		unsigned long arg_u[3];
+		unsigned long arg_u[4];
 		if (copy_from_user(arg_u, (void __user *)arg, sizeof(arg_u)))
 			return -EFAULT;
 		return get_next_unhit_func((char __user *)arg_u[0],
-					   arg_u[1], arg_u[2]);
+					   arg_u[1], arg_u[2], arg_u[3]);
 	}
 
 	case COV_NEXT_UNHIT_CP: {
-		unsigned long arg_u[3];
+		unsigned long arg_u[4];
 		if (copy_from_user(arg_u, (void __user *)arg, sizeof(arg_u)))
 			return -EFAULT;
 		return get_next_unhit_cp((char __user *)arg_u[0],
-					 arg_u[1], arg_u[2]);
+					 arg_u[1], arg_u[2], arg_u[3]);
 	}
 
 	case COV_PATH_MAP: {

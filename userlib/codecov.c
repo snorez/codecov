@@ -41,8 +41,11 @@ int cov_unregister(void)
  *	@name too long
  *	@func too long
  *	the register_*probe failed, Documentations/kprobes.txt for more detail
+ *	@level: the total level value of the function, different from
+ *		get_next_unhit_cp / get_next_unhit_func level
  */
-int checkpoint_add(char *name, char *func, unsigned long offset)
+int checkpoint_add(char *name, char *func, unsigned long offset,
+		   unsigned long level)
 {
 	struct checkpoint tmp;
 
@@ -52,6 +55,7 @@ int checkpoint_add(char *name, char *func, unsigned long offset)
 	tmp.offset = offset;
 	tmp.name_len = strlen(name);
 	tmp.func_len = strlen(func);
+	tmp.level = level;
 
 	int err = ioctl(cov_fd, COV_ADD_CP, (unsigned long)&tmp);
 
@@ -114,22 +118,24 @@ int cov_get_buffer(char *buffer, size_t len)
 	return ioctl(cov_fd, COV_GET_BUFFER, (unsigned long)&bu);
 }
 
-int get_next_unhit_func(char *buf, size_t len, size_t skip)
+int get_next_unhit_func(char *buf, size_t len, size_t skip, unsigned long level)
 {
-	unsigned long arg_tmp[3];
+	unsigned long arg_tmp[4];
 	arg_tmp[0] = (unsigned long)buf;
 	arg_tmp[1] = len;
 	arg_tmp[2] = skip;
+	arg_tmp[3] = level;
 
 	return ioctl(cov_fd, COV_NEXT_UNHIT_FUNC, (unsigned long)arg_tmp);
 }
 
-int get_next_unhit_cp(char *buf, size_t len, size_t skip)
+int get_next_unhit_cp(char *buf, size_t len, size_t skip, unsigned long level)
 {
-	unsigned long arg_tmp[3];
+	unsigned long arg_tmp[4];
 	arg_tmp[0] = (unsigned long)buf;
 	arg_tmp[1] = len;
 	arg_tmp[2] = skip;
+	arg_tmp[3] = level;
 
 	return ioctl(cov_fd, COV_NEXT_UNHIT_CP, (unsigned long)arg_tmp);
 }

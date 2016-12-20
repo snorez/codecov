@@ -65,6 +65,7 @@ struct checkpoint {
 
 	unsigned long hit;		/* numbers been hit */
 	char *name;			/* checkpoint's specific name */
+	unsigned long level;
 	struct kprobe *this_kprobe;	/* used inside a function */
 	struct kretprobe *this_retprobe;/* against this_kprobe, used on func */
 };
@@ -84,6 +85,7 @@ struct checkpoint_user {
 	size_t func_len;
 	char __user *func;
 	unsigned long offset;
+	unsigned long level;
 };
 
 extern int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg);
@@ -93,15 +95,18 @@ extern int cp_default_ret_entryhdl(struct kretprobe_instance *ri,
 				   struct pt_regs *regs);
 
 extern void checkpoint_init(void);
-extern int checkpoint_add(char *name, char *func, unsigned long offset);
+extern int checkpoint_add(char *name, char *func, unsigned long offset,
+			  unsigned long level);
 extern void checkpoint_del(char *name);
 extern void checkpoint_restart(void);
 extern void checkpoint_exit(void);
 extern unsigned long checkpoint_get_numhit(void);
 extern unsigned long checkpoint_count(void);
 unsigned long path_count(void);
-extern int get_next_unhit_func(char __user *buf, size_t len, size_t skip);
-extern int get_next_unhit_cp(char __user *buf, size_t len, size_t skip);
+extern int get_next_unhit_func(char __user *buf, size_t len, size_t skip,
+			       unsigned long level);
+extern int get_next_unhit_cp(char __user *buf, size_t len, size_t skip,
+			     unsigned long level);
 extern int get_path_map(char __user *buf, size_t __user *len);
 
 #endif
