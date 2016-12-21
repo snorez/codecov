@@ -32,6 +32,8 @@ static int address_in_caller(struct checkpoint *cp, unsigned long address)
  * search the task_list_root to get/set the sample_id,
  * lookup_symbol_name to set the function name
  * if @address == 0, then we take the value of current_thread.prev_addr
+ *
+ * XXX: get a BUG here, when called by cp_default_kp_prehdl, the kernel stuck
  */
 static int checkpoint_caller_add(struct checkpoint *cp, unsigned long address)
 {
@@ -45,6 +47,7 @@ static int checkpoint_caller_add(struct checkpoint *cp, unsigned long address)
 	int (*get_symbol_via_address)(unsigned long, char *);
 	int err;
 	unsigned long id;
+	int no_name = 0;
 
 	read_lock(&task_list_rwlock);
 	list_for_each_entry(tmp, &task_list_root, list) {
@@ -59,25 +62,29 @@ static int checkpoint_caller_add(struct checkpoint *cp, unsigned long address)
 		return -2;
 	} else {
 		id = ct->sample_id;
-		if (!address)
+		if (!address) {
 			address = ct->prev_addr;
+			no_name = 1;
+		}
 	}
 	read_unlock(&task_list_rwlock);
 
 	if (address_in_caller(cp, address))
 		return -1;
 
-	new = kmalloc(sizeof(*new), GFP_KERNEL);
+	/* XXX: why kmalloc would get stuck? */
+	new = kzalloc(sizeof(*new), GFP_KERNEL);
 	if (unlikely(!new))
 		return -2;
-	memset(new, 0, sizeof(*new));
 	new->sample_id = id;
 
-	get_symbol_via_address =
-			(void *)kallsyms_lookup_name("lookup_symbol_name");
-	err = get_symbol_via_address(address, new->name);
-	if (unlikely(err))
-		memset(new->name, 0, KSYM_NAME_LEN);
+	if (!no_name) {
+		get_symbol_via_address =
+				(void *)kallsyms_lookup_name("lookup_symbol_name");
+		err = get_symbol_via_address(address, new->name);
+		if (unlikely(err))
+			memset(new->name, 0, KSYM_NAME_LEN);
+	}
 	new->address = address;
 
 	write_lock(&cp->caller_rwlock);
@@ -99,11 +106,9 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 	if (!task_is_test_case(current))
 		return 0;
 
-	read_lock(&cproot_rwlock);
+	write_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
 		if (tmp->this_kprobe == kp) {
-			if (unlikely(!tmp->hit))
-				ctbuf_print("NEW PATH: %s\n", tmp->name);
 			tmp->hit++;
 			if (unlikely(!tmp->hit))
 				tmp->hit = 1;
@@ -117,7 +122,7 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 			break;
 		}
 	}
-	read_unlock(&cproot_rwlock);
+	write_unlock(&cproot_rwlock);
 
 	write_lock(&task_list_rwlock);
 	list_for_each_entry(ct, &task_list_root, list) {
@@ -171,7 +176,7 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 	if (!task_is_test_case(current))
 		return 0;
 
-	read_lock(&cproot_rwlock);
+	write_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
 		if (tmp->this_retprobe == ri->rp) {
 			tmp->hit++;
@@ -195,7 +200,7 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 			break;
 		}
 	}
-	read_unlock(&cproot_rwlock);
+	write_unlock(&cproot_rwlock);
 
 	write_lock(&task_list_rwlock);
 	list_for_each_entry(ct, &task_list_root, list) {

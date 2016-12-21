@@ -8,7 +8,7 @@ int ctbuf_print(const char *fmt, ...)
 	int i = 0;
 
 	va_start(args, fmt);
-	read_lock(&task_list_rwlock);
+	write_lock(&task_list_rwlock);
 	list_for_each_entry(ct, &task_list_root, list) {
 		if (ct->task == task) {
 			size_t left;
@@ -25,7 +25,7 @@ int ctbuf_print(const char *fmt, ...)
 			i = vsnprintf(ct->buffer, THREAD_BUFFER_SIZE, fmt, args);
 		}
 	}
-	read_unlock(&task_list_rwlock);
+	write_unlock(&task_list_rwlock);
 	va_end(args);
 	return i;
 }
