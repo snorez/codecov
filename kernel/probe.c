@@ -73,7 +73,7 @@ static int checkpoint_caller_add(struct checkpoint *cp, unsigned long address)
 		return -1;
 
 	/* XXX: why kmalloc would get stuck? */
-	new = kzalloc(sizeof(*new), GFP_KERNEL);
+	new = kzalloc(sizeof(*new), GFP_ATOMIC);
 	if (unlikely(!new))
 		return -2;
 	new->sample_id = id;
