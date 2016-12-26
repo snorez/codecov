@@ -103,6 +103,7 @@ extern void checkpoint_exit(void);
 extern unsigned long checkpoint_get_numhit(void);
 extern unsigned long checkpoint_count(void);
 unsigned long path_count(void);
+extern unsigned long get_cp_status(char *name, int option);
 extern int get_next_unhit_func(char __user *buf, size_t len, size_t skip,
 			       unsigned long level);
 extern int get_next_unhit_cp(char __user *buf, size_t len, size_t skip,

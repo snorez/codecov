@@ -123,6 +123,17 @@ int cov_get_buffer(char *buffer, size_t len)
 	return ioctl(cov_fd, COV_GET_BUFFER, (unsigned long)&bu);
 }
 
+int get_cp_status(char *name, int option, unsigned long *value)
+{
+	unsigned long arg_u[4];
+	arg_u[0] = (unsigned long)name;
+	arg_u[1] = strlen(name);
+	arg_u[2] = option;
+	arg_u[3] = (unsigned long)value;
+
+	return ioctl(cov_fd, COV_GET_CP_STATUS, (unsigned long)arg_u);
+}
+
 int get_next_unhit_func(char *buf, size_t len, size_t skip, unsigned long level)
 {
 	unsigned long arg_tmp[4];

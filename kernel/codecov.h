@@ -33,5 +33,6 @@
 #define COV_NEXT_UNHIT_CP	_IOWR(COV_IOC_MAGIC, 10, unsigned long)
 #define COV_PATH_MAP		_IOWR(COV_IOC_MAGIC, 11, unsigned long)
 #define COV_CHECK		_IOWR(COV_IOC_MAGIC, 12, unsigned long)
+#define COV_GET_CP_STATUS	_IOWR(COV_IOC_MAGIC, 13, unsigned long)
 
 #endif

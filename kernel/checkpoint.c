@@ -357,7 +357,33 @@ unsigned long path_count(void)
 	return num;
 }
 
-static int has_level(struct checkpoint *cp, unsigned long level)
+unsigned long get_cp_status(char *name, int option)
+{
+	unsigned long ret = -1;
+	struct checkpoint *cp;
+
+	read_lock(&cproot_rwlock);
+	list_for_each_entry(cp, &cproot, siblings) {
+		if ((strlen(cp->name) == strlen(name)) &&
+			(!strncmp(cp->name, name, strlen(name)))) {
+			switch (option) {
+			case 0:
+				ret = cp->hit;
+				break;
+			case 1:
+				ret = cp->level;
+				break;
+			default:
+				ret = -1;
+			}
+			break;
+		}
+	}
+	read_unlock(&cproot_rwlock);
+	return ret;
+}
+
+static unsigned long has_level(struct checkpoint *cp, unsigned long level)
 {
 	if ((level > 64) || (level < 1))
 		return 0;
@@ -390,16 +416,15 @@ int get_next_unhit_func(char __user *buf, size_t len, size_t skip,
 
 	read_lock(&cproot_rwlock);
 	list_for_each_entry(cp, &cproot, siblings) {
-		if (!cp->hit)
-			if (!strchr(cp->name, '#')) {
-				if (!has_level(cp, level))
-					continue;
-				if (!skip) {
-					found = 1;
-					break;
-				}
-				skip--;
+		if ((!cp->hit) && (!strchr(cp->name, '#'))) {
+			if (!has_level(cp, level))
+				continue;
+			if (!skip) {
+				found = 1;
+				break;
 			}
+			skip--;
+		}
 	}
 	read_unlock(&cproot_rwlock);
 	err = -ENOENT;

@@ -141,6 +141,35 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				    (size_t __user *)arg_u[1]);
 	}
 
+	case COV_GET_CP_STATUS: {
+		unsigned long arg_u[4];
+		char *name;
+
+		if (copy_from_user(arg_u, (void __user *)arg, sizeof(arg_u)))
+			return -EFAULT;
+
+		if ((arg_u[1] == 0) || (arg_u[1] == (unsigned long)-1))
+			return -EINVAL;
+
+		name = kzalloc(arg_u[1]+1, GFP_KERNEL);
+		if (!name)
+			return -ENOMEM;
+
+		if (copy_from_user(name, (void __user *)arg_u[0], arg_u[1])) {
+			kfree(name);
+			return -EFAULT;
+		}
+
+		res = get_cp_status(name, arg_u[2]);
+		if (copy_to_user((void __user *)arg_u[3], &res,
+				 sizeof(unsigned long))) {
+			kfree(name);
+			return -EFAULT;
+		}
+		kfree(name);
+		return 0;
+	}
+
 	default:
 		return -ENOTSUPP;
 	}
