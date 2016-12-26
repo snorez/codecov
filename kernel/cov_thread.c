@@ -91,6 +91,22 @@ void cov_thread_del(void)
 	write_unlock(&task_list_rwlock);
 }
 
+void cov_thread_check(void)
+{
+	struct cov_thread *tmp, *next;
+
+	write_lock(&task_list_rwlock);
+	list_for_each_entry_safe(tmp, next, &task_list_root, list) {
+		if (atomic_read(&tmp->task->usage) == 1) {
+			put_task_struct(tmp->task);
+			list_del(&tmp->list);
+			kfree(tmp->buffer);
+			kfree(tmp);
+		}
+	}
+	write_unlock(&task_list_rwlock);
+}
+
 void cov_thread_exit(void)
 {
 	struct cov_thread *tmp, *next;
@@ -102,8 +118,7 @@ void cov_thread_exit(void)
 	 */
 	write_lock(&task_list_rwlock);
 	list_for_each_entry_safe(tmp, next, &task_list_root, list) {
-		if (atomic_read(&tmp->task->usage) == 1)
-			put_task_struct(tmp->task);
+		put_task_struct(tmp->task);
 		list_del(&tmp->list);
 		kfree(tmp->buffer);
 		kfree(tmp);

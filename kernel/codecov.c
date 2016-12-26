@@ -100,6 +100,10 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		cov_thread_del();
 		return 0;
 
+	case COV_CHECK:
+		cov_thread_check();
+		return 0;
+
 	case COV_GET_BUFFER: {
 		struct buffer_user bu;
 		if (copy_from_user(&bu, (void __user *)arg, sizeof(bu)))

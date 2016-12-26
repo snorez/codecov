@@ -35,6 +35,7 @@ extern int task_is_test_case(struct task_struct *task);
 extern void cov_thread_init(void);
 extern int cov_thread_add(unsigned long id, int is_test_case);
 extern void cov_thread_del(void);
+extern void cov_thread_check(void);
 extern void cov_thread_exit(void);
 
 #endif

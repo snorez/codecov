@@ -21,6 +21,7 @@
 #define COV_NEXT_UNHIT_FUNC	_IOWR(COV_IOC_MAGIC, 9, unsigned long)
 #define COV_NEXT_UNHIT_CP	_IOWR(COV_IOC_MAGIC, 10, unsigned long)
 #define COV_PATH_MAP		_IOWR(COV_IOC_MAGIC, 11, unsigned long)
+#define COV_CHECK		_IOWR(COV_IOC_MAGIC, 12, unsigned long)
 
 struct checkpoint {
 	size_t name_len;
@@ -45,6 +46,7 @@ extern int get_numtotal(unsigned long *num_total);
 extern int get_coverage(double *percent);
 extern int checkpoint_restart(void);
 extern int cov_register(unsigned long id, int is_test_case);
+extern int cov_check(void);
 extern int cov_unregister(void);
 extern int cov_get_buffer(char *buffer, size_t len);
 extern int cov_path_count(unsigned long *count);

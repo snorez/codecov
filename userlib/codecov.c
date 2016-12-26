@@ -28,6 +28,11 @@ int cov_register(unsigned long id, int is_test_case)
 	return err;
 }
 
+int cov_check(void)
+{
+	return ioctl(cov_fd, COV_CHECK, 0);
+}
+
 int cov_unregister(void)
 {
 	ioctl(cov_fd, COV_UNREGISTER, 0);
