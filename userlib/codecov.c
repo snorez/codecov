@@ -2,6 +2,7 @@
 
 const static char *cov_file = "/sys/kernel/debug/codecov_entry";
 static int cov_fd;
+static char *log_buffer;
 
 /*
  * cov_register: register current process
@@ -13,14 +14,21 @@ int cov_register(unsigned long id, int is_test_case)
 	int err = 0;
 	unsigned long arg_tmp[2];
 
-	cov_fd = open(cov_file, O_RDONLY);
-	if (cov_fd == -1)
+	log_buffer = malloc(THREAD_BUFFER_SIZE);
+	if (!log_buffer)
 		return -1;
+
+	cov_fd = open(cov_file, O_RDONLY);
+	if (cov_fd == -1) {
+		free(log_buffer);
+		return -1;
+	}
 
 	arg_tmp[0] = id;
 	arg_tmp[1] = (unsigned long)is_test_case;
 	err = ioctl(cov_fd, COV_REGISTER, (unsigned long)arg_tmp);
 	if (err == -1) {
+		free(log_buffer);
 		close(cov_fd);
 		cov_fd = -1;
 	}
@@ -37,6 +45,7 @@ int cov_unregister(void)
 {
 	ioctl(cov_fd, COV_UNREGISTER, 0);
 	close(cov_fd);
+	free(log_buffer);
 	return 0;
 }
 
@@ -121,6 +130,16 @@ int cov_get_buffer(char *buffer, size_t len)
 	bu.len = len;
 
 	return ioctl(cov_fd, COV_GET_BUFFER, (unsigned long)&bu);
+}
+
+int cov_buffer_print(void)
+{
+	int err = cov_get_buffer(log_buffer, THREAD_BUFFER_SIZE);
+	if (err == -1)
+		return -1;
+
+	printf("%s\n", log_buffer);
+	return 0;
 }
 
 int get_cp_status(char *name, int option, unsigned long *value)

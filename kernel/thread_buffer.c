@@ -36,7 +36,7 @@ int ctbuf_get(char __user *buf, size_t len)
 	struct cov_thread *ct;
 	int err = -ESRCH;
 
-	read_lock(&task_list_rwlock);
+	write_lock(&task_list_rwlock);
 	list_for_each_entry(ct, &task_list_root, list) {
 		if (ct->task == task) {
 			size_t len_ct = strlen(ct->buffer);
@@ -44,10 +44,11 @@ int ctbuf_get(char __user *buf, size_t len)
 			err = 0;
 			if (copy_to_user(buf, ct->buffer, len))
 				err = -EFAULT;
+			memset(ct->buffer, 0, THREAD_BUFFER_SIZE);
 			break;
 		}
 	}
-	read_unlock(&task_list_rwlock);
+	write_unlock(&task_list_rwlock);
 
 	return err;
 }

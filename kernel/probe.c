@@ -142,8 +142,18 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 int cp_default_ret_hdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
 	struct cov_thread *ct;
+	struct checkpoint *tmp;
 	if (!task_is_test_case(current))
 		return 0;
+
+	read_lock(&cproot_rwlock);
+	list_for_each_entry(tmp, &cproot, siblings) {
+		if (ri->rp == tmp->this_retprobe) {
+			ctbuf_print("<<<<<<<<< %s\n", tmp->name);
+			break;
+		}
+	}
+	read_unlock(&cproot_rwlock);
 
 	write_lock(&task_list_rwlock);
 	list_for_each_entry(ct, &task_list_root, list) {
@@ -183,6 +193,7 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 			if (unlikely(!tmp->hit))
 				tmp->hit = 1;
 
+			ctbuf_print(">>>>>>>>> %s\n", tmp->name);
 			/*
 			 * XXX: note that ri->ret_addr not the current caller addr.
 			 * so we should get the value [sp]

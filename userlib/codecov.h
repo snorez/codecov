@@ -7,6 +7,8 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/user.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #define COV_IOC_MAGIC		'z'
 #define COV_COUNT_HIT		_IOWR(COV_IOC_MAGIC, 0, unsigned long)
@@ -50,6 +52,7 @@ extern int cov_register(unsigned long id, int is_test_case);
 extern int cov_check(void);
 extern int cov_unregister(void);
 extern int cov_get_buffer(char *buffer, size_t len);
+extern int cov_buffer_print(void);
 extern int cov_path_count(unsigned long *count);
 extern int get_cp_status(char *name, int option, unsigned long *value);
 extern int get_next_unhit_func(char *buf, size_t len, size_t skip,
