@@ -170,6 +170,13 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return 0;
 	}
 
+	case COV_CP_XSTATE: {
+		unsigned long arg_u[3];
+		if (copy_from_user(arg_u, (void __user *)arg, sizeof(arg_u)))
+			return -EFAULT;
+		return checkpoint_xstate(arg_u[0], arg_u[1], arg_u[2]);
+	}
+
 	default:
 		return -ENOTSUPP;
 	}

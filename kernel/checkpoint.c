@@ -75,11 +75,11 @@ static void do_set_jxx_probe(char *func, unsigned long base,
 
 	/* now we have two addresses: next_addr, addr_jmp */
 	memset(name_tmp, 0, KSYM_NAME_LEN);
-	snprintf(name_tmp, KSYM_NAME_LEN, "%s#%lx", func,
+	snprintf(name_tmp, KSYM_NAME_LEN, "%s#%ld", func,
 			(unsigned long)next_addr-base);
 	do_checkpoint_add(name_tmp, func, (unsigned long)next_addr-base, level);
 	memset(name_tmp, 0, KSYM_NAME_LEN);
-	snprintf(name_tmp, KSYM_NAME_LEN, "%s#%lx", func,
+	snprintf(name_tmp, KSYM_NAME_LEN, "%s#%ld", func,
 			(unsigned long)addr_jmp-base);
 	do_checkpoint_add(name_tmp, func, (unsigned long)addr_jmp-base, level);
 	return;
@@ -240,6 +240,60 @@ int checkpoint_add(char *name, char *func, unsigned long offset,
 	int err = do_checkpoint_add(name, func, offset, level);
 	if (!err && !offset)
 		do_auto_add(func, level);
+	return err;
+}
+
+int checkpoint_xstate(unsigned long name, unsigned long len, unsigned long enable)
+{
+	char cp_name[KSYM_NAME_LEN];
+	int (*func_kp)(struct kprobe *kp);
+	int (*func_kretp)(struct kretprobe *rp);
+	struct checkpoint *cp;
+	int err = 0;
+
+	if (name) {
+		if (len > KSYM_NAME_LEN)
+			return -EINVAL;
+
+		memset(cp_name, 0, KSYM_NAME_LEN);
+		if (copy_from_user(cp_name, (char __user *)name, len))
+			return -EFAULT;
+	}
+
+	if (enable) {
+		func_kp = enable_kprobe;
+		func_kretp = enable_kretprobe;
+	} else {
+		func_kp = disable_kprobe;
+		func_kretp = disable_kretprobe;
+	}
+
+	if (name) {
+		write_lock(&cproot_rwlock);
+		list_for_each_entry(cp, &cproot, siblings) {
+			if ((strlen(cp->name) == strlen(cp_name)) &&
+				(!strncmp(cp->name, cp_name, strlen(cp_name)))) {
+				if (cp->this_kprobe)
+					err = func_kp(cp->this_kprobe);
+				else if (cp->this_retprobe)
+					err = func_kretp(cp->this_retprobe);
+				break;
+			}
+		}
+		write_unlock(&cproot_rwlock);
+	} else {
+		write_lock(&cproot_rwlock);
+		list_for_each_entry(cp, &cproot, siblings) {
+			if (cp->this_kprobe)
+				err = func_kp(cp->this_kprobe);
+			else if (cp->this_retprobe)
+				err = func_kretp(cp->this_retprobe);
+
+			if (err)
+				break;
+		}
+		write_unlock(&cproot_rwlock);
+	}
 	return err;
 }
 

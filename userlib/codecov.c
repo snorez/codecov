@@ -134,11 +134,23 @@ int cov_get_buffer(char *buffer, size_t len)
 
 int cov_buffer_print(void)
 {
+	memset(log_buffer, 0, THREAD_BUFFER_SIZE);
+
 	int err = cov_get_buffer(log_buffer, THREAD_BUFFER_SIZE);
 	if (err == -1)
 		return -1;
 
 	printf("%s\n", log_buffer);
+	return 0;
+}
+
+int cov_buffer_clear(void)
+{
+	int err = cov_get_buffer(log_buffer, THREAD_BUFFER_SIZE);
+	if (err == -1)
+		return -1;
+
+	memset(log_buffer, 0, THREAD_BUFFER_SIZE);
 	return 0;
 }
 
@@ -187,4 +199,19 @@ int get_path_map(char *buf, size_t *len)
 int cov_path_count(unsigned long *count)
 {
 	return ioctl(cov_fd, COV_PATH_COUNT, count);
+}
+
+int checkpoint_xstate(char *name, size_t len, unsigned long enable)
+{
+	unsigned long arg_u[3];
+	arg_u[0] = (unsigned long)name;
+	arg_u[1] = (unsigned long)len;
+	arg_u[2] = (unsigned long)enable;
+
+	return ioctl(cov_fd, COV_CP_XSTATE, (unsigned long)arg_u);
+}
+
+int checkpoint_xstate_all(unsigned long enable)
+{
+	return checkpoint_xstate(NULL, 0, enable);
 }

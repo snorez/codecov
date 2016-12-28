@@ -113,6 +113,8 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 			if (unlikely(!tmp->hit))
 				tmp->hit = 1;
 
+			ctbuf_print("--------> %s\n", tmp->name);
+
 			err = checkpoint_caller_add(tmp, 0);
 			if (unlikely(err == -2))
 				ctbuf_print("ERR: checkpoint_caller_add: %s\n",

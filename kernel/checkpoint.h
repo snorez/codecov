@@ -97,6 +97,8 @@ extern int cp_default_ret_entryhdl(struct kretprobe_instance *ri,
 extern void checkpoint_init(void);
 extern int checkpoint_add(char *name, char *func, unsigned long offset,
 			  unsigned long level);
+extern int checkpoint_xstate(unsigned long name, unsigned long len,
+			     unsigned long enable);
 extern void checkpoint_del(char *name);
 extern void checkpoint_restart(void);
 extern void checkpoint_exit(void);

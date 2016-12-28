@@ -25,6 +25,7 @@
 #define COV_PATH_MAP		_IOWR(COV_IOC_MAGIC, 11, unsigned long)
 #define COV_CHECK		_IOWR(COV_IOC_MAGIC, 12, unsigned long)
 #define COV_GET_CP_STATUS	_IOWR(COV_IOC_MAGIC, 13, unsigned long)
+#define COV_CP_XSTATE		_IOWR(COV_IOC_MAGIC, 14, unsigned long)
 
 struct checkpoint {
 	size_t name_len;
@@ -53,6 +54,7 @@ extern int cov_check(void);
 extern int cov_unregister(void);
 extern int cov_get_buffer(char *buffer, size_t len);
 extern int cov_buffer_print(void);
+extern int cov_buffer_clear(void);
 extern int cov_path_count(unsigned long *count);
 extern int get_cp_status(char *name, int option, unsigned long *value);
 extern int get_next_unhit_func(char *buf, size_t len, size_t skip,
@@ -60,5 +62,7 @@ extern int get_next_unhit_func(char *buf, size_t len, size_t skip,
 extern int get_next_unhit_cp(char *buf, size_t len, size_t skip,
 			     unsigned long level);
 extern int get_path_map(char *buf, size_t *len);
+extern int checkpoint_xstate(char *name, size_t len, unsigned long enable);
+extern int checkpoint_xstate_all(unsigned long enable);
 
 #endif
