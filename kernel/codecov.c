@@ -160,7 +160,7 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			return -EFAULT;
 		}
 
-		res = get_cp_status(name, arg_u[2]);
+		res = get_cp_status(name, (enum status_opt)arg_u[2]);
 		if (copy_to_user((void __user *)arg_u[3], &res,
 				 sizeof(unsigned long))) {
 			kfree(name);
@@ -171,10 +171,10 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	}
 
 	case COV_CP_XSTATE: {
-		unsigned long arg_u[3];
+		unsigned long arg_u[4];
 		if (copy_from_user(arg_u, (void __user *)arg, sizeof(arg_u)))
 			return -EFAULT;
-		return checkpoint_xstate(arg_u[0], arg_u[1], arg_u[2]);
+		return checkpoint_xstate(arg_u[0], arg_u[1], arg_u[2], arg_u[3]);
 	}
 
 	default:

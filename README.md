@@ -40,6 +40,9 @@ then we do nothing.
 + you can't probe a static function yet, cause the symbol couldn't be found
 + it seems that when a program calls `fork()`, the kernel module would take high
 	cpu usage, and the system doesn't reponse
+	+ maybe we should disable all the probes, and then enable the target
+		function/s, then rerun the test.
+		the `checkpoint_xstate` is added to fix this
 
 # things should be done
 + add/del checkpoint(path_node)

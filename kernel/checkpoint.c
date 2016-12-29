@@ -218,6 +218,7 @@ static int do_checkpoint_add(char *name, char *func, unsigned long offset,
 	rwlock_init(&new->caller_rwlock);
 	INIT_LIST_HEAD(&new->caller);
 	new->level = level;
+	new->enabled = 1;
 
 	write_lock(&cproot_rwlock);
 	list_add_tail(&new->siblings, &cproot);
@@ -243,7 +244,8 @@ int checkpoint_add(char *name, char *func, unsigned long offset,
 	return err;
 }
 
-int checkpoint_xstate(unsigned long name, unsigned long len, unsigned long enable)
+int checkpoint_xstate(unsigned long name, unsigned long len, unsigned long enable,
+		      unsigned long subpath)
 {
 	char cp_name[KSYM_NAME_LEN];
 	int (*func_kp)(struct kprobe *kp);
@@ -271,13 +273,20 @@ int checkpoint_xstate(unsigned long name, unsigned long len, unsigned long enabl
 	if (name) {
 		write_lock(&cproot_rwlock);
 		list_for_each_entry(cp, &cproot, siblings) {
-			if ((strlen(cp->name) == strlen(cp_name)) &&
-				(!strncmp(cp->name, cp_name, strlen(cp_name)))) {
+			if (((strlen(cp->name) == strlen(cp_name)) &&
+				(!strncmp(cp->name, cp_name, strlen(cp_name)))) ||
+			    (subpath &&
+			     (!strncmp(cp->name, cp_name, strlen(cp_name))) &&
+			     (strlen(cp->name) > strlen(cp_name)) &&
+			     (*(cp->name + strlen(cp_name)) == '#'))) {
 				if (cp->this_kprobe)
 					err = func_kp(cp->this_kprobe);
 				else if (cp->this_retprobe)
 					err = func_kretp(cp->this_retprobe);
-				break;
+				if (!err)
+					cp->enabled = !!enable;
+				else
+					break;
 			}
 		}
 		write_unlock(&cproot_rwlock);
@@ -291,6 +300,8 @@ int checkpoint_xstate(unsigned long name, unsigned long len, unsigned long enabl
 
 			if (err)
 				break;
+			else
+				cp->enabled = !!enable;
 		}
 		write_unlock(&cproot_rwlock);
 	}
@@ -411,7 +422,7 @@ unsigned long path_count(void)
 	return num;
 }
 
-unsigned long get_cp_status(char *name, int option)
+unsigned long get_cp_status(char *name, enum status_opt option)
 {
 	unsigned long ret = -1;
 	struct checkpoint *cp;
@@ -421,11 +432,14 @@ unsigned long get_cp_status(char *name, int option)
 		if ((strlen(cp->name) == strlen(name)) &&
 			(!strncmp(cp->name, name, strlen(name)))) {
 			switch (option) {
-			case 0:
+			case STATUS_HIT:
 				ret = cp->hit;
 				break;
-			case 1:
+			case STATUS_LEVEL:
 				ret = cp->level;
+				break;
+			case STATUS_ENABLED:
+				ret = cp->enabled;
 				break;
 			default:
 				ret = -1;

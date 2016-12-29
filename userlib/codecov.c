@@ -154,12 +154,12 @@ int cov_buffer_clear(void)
 	return 0;
 }
 
-int get_cp_status(char *name, int option, unsigned long *value)
+int get_cp_status(char *name, enum status_opt option, unsigned long *value)
 {
 	unsigned long arg_u[4];
 	arg_u[0] = (unsigned long)name;
 	arg_u[1] = strlen(name);
-	arg_u[2] = option;
+	arg_u[2] = (unsigned long)option;
 	arg_u[3] = (unsigned long)value;
 
 	return ioctl(cov_fd, COV_GET_CP_STATUS, (unsigned long)arg_u);
@@ -201,17 +201,19 @@ int cov_path_count(unsigned long *count)
 	return ioctl(cov_fd, COV_PATH_COUNT, count);
 }
 
-int checkpoint_xstate(char *name, size_t len, unsigned long enable)
+int checkpoint_xstate(char *name, size_t len, unsigned long enable,
+		      unsigned long subpath)
 {
-	unsigned long arg_u[3];
+	unsigned long arg_u[4];
 	arg_u[0] = (unsigned long)name;
 	arg_u[1] = (unsigned long)len;
 	arg_u[2] = (unsigned long)enable;
+	arg_u[3] = (unsigned long)subpath;
 
 	return ioctl(cov_fd, COV_CP_XSTATE, (unsigned long)arg_u);
 }
 
 int checkpoint_xstate_all(unsigned long enable)
 {
-	return checkpoint_xstate(NULL, 0, enable);
+	return checkpoint_xstate(NULL, 0, enable, 0);
 }

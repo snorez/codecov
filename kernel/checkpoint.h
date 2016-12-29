@@ -66,6 +66,7 @@ struct checkpoint {
 	unsigned long hit;		/* numbers been hit */
 	char *name;			/* checkpoint's specific name */
 	unsigned long level;
+	unsigned long enabled;
 	struct kprobe *this_kprobe;	/* used inside a function */
 	struct kretprobe *this_retprobe;/* against this_kprobe, used on func */
 };
@@ -88,6 +89,8 @@ struct checkpoint_user {
 	unsigned long level;
 };
 
+enum status_opt { STATUS_HIT, STATUS_LEVEL, STATUS_ENABLED, };
+
 extern int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg);
 extern int cp_default_ret_hdl(struct kretprobe_instance *ri,
 			      struct pt_regs *regs);
@@ -98,14 +101,14 @@ extern void checkpoint_init(void);
 extern int checkpoint_add(char *name, char *func, unsigned long offset,
 			  unsigned long level);
 extern int checkpoint_xstate(unsigned long name, unsigned long len,
-			     unsigned long enable);
+			     unsigned long enable, unsigned long subpath);
 extern void checkpoint_del(char *name);
 extern void checkpoint_restart(void);
 extern void checkpoint_exit(void);
 extern unsigned long checkpoint_get_numhit(void);
 extern unsigned long checkpoint_count(void);
 unsigned long path_count(void);
-extern unsigned long get_cp_status(char *name, int option);
+extern unsigned long get_cp_status(char *name, enum status_opt option);
 extern int get_next_unhit_func(char __user *buf, size_t len, size_t skip,
 			       unsigned long level);
 extern int get_next_unhit_cp(char __user *buf, size_t len, size_t skip,
