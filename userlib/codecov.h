@@ -26,6 +26,7 @@
 #define COV_CHECK		_IOWR(COV_IOC_MAGIC, 12, unsigned long)
 #define COV_GET_CP_STATUS	_IOWR(COV_IOC_MAGIC, 13, unsigned long)
 #define COV_CP_XSTATE		_IOWR(COV_IOC_MAGIC, 14, unsigned long)
+#define COV_THREAD_EFFECTIVE	_IOWR(COV_IOC_MAGIC, 15, unsigned long)
 
 struct checkpoint {
 	size_t name_len;
@@ -67,5 +68,6 @@ extern int get_path_map(char *buf, size_t *len);
 extern int checkpoint_xstate(char *name, size_t len, unsigned long enable,
 			     unsigned long subpath);
 extern int checkpoint_xstate_all(unsigned long enable);
+extern int cov_thread_effective(void);
 
 #endif

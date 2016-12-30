@@ -217,3 +217,8 @@ int checkpoint_xstate_all(unsigned long enable)
 {
 	return checkpoint_xstate(NULL, 0, enable, 0);
 }
+
+int cov_thread_effective(void)
+{
+	return ioctl(cov_fd, COV_THREAD_EFFECTIVE, 0);
+}

@@ -177,6 +177,10 @@ static long cov_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return checkpoint_xstate(arg_u[0], arg_u[1], arg_u[2], arg_u[3]);
 	}
 
+	case COV_THREAD_EFFECTIVE: {
+		return cov_thread_effective();
+	}
+
 	default:
 		return -ENOTSUPP;
 	}

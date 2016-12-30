@@ -102,6 +102,7 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 	struct checkpoint *tmp;
 	struct cov_thread *ct;
 	int err;
+	int effective = 0;
 
 	if (!task_is_test_case(current))
 		return 0;
@@ -119,8 +120,10 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 			if (unlikely(err == -2))
 				ctbuf_print("ERR: checkpoint_caller_add: %s\n",
 					    tmp->name);
-			else if (!err)
+			else if (!err) {
 				ctbuf_print("NEW PATH: %s\n", tmp->name);
+				effective = 1;
+			}
 			break;
 		}
 	}
@@ -130,6 +133,8 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 	list_for_each_entry(ct, &task_list_root, list) {
 		if (ct->task == current) {
 			ct->prev_addr = (unsigned long)kp->addr;
+			if (effective)
+				ct->is_sample_effective = 1;
 			break;
 		}
 	}
@@ -184,6 +189,7 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 	struct checkpoint *tmp;
 	struct cov_thread *ct;
 	int err;
+	int effective = 0;
 
 	if (!task_is_test_case(current))
 		return 0;
@@ -206,10 +212,12 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 				ctbuf_print("ERR: checkpoint_caller_add: %s: %p\n",
 					    tmp->name,
 					    ri->ret_addr);
-			else if (!err)
+			else if (!err) {
 				ctbuf_print("NEW PATH: %s. CALLER_ADDR: %p\n",
 					    tmp->name,
 					    *(unsigned long *)regs->sp);
+				effective = 1;
+			}
 			break;
 		}
 	}
@@ -219,6 +227,8 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 	list_for_each_entry(ct, &task_list_root, list) {
 		if (ct->task == current) {
 			ct->prev_addr = regs->ip;
+			if (effective)
+				ct->is_sample_effective = 1;
 			break;
 		}
 	}

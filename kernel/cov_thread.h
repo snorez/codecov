@@ -26,6 +26,7 @@ struct cov_thread {
 	unsigned long sample_id;
 	unsigned long prev_addr;	/* for kprobe, not kretprobe */
 	int is_test_case;		/* is current process test case */
+	int is_sample_effective;	/* current process has NEW PATH */
 };
 extern struct list_head task_list_root;
 extern rwlock_t task_list_rwlock;
@@ -36,6 +37,7 @@ extern void cov_thread_init(void);
 extern int cov_thread_add(unsigned long id, int is_test_case);
 extern void cov_thread_del(void);
 extern void cov_thread_check(void);
+extern int cov_thread_effective(void);
 extern void cov_thread_exit(void);
 
 #endif

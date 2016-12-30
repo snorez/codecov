@@ -12,3 +12,4 @@ __pycache__/
 *.fuse*
 *~
 .ycm_extra_conf.py
+README_cn.md

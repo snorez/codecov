@@ -107,6 +107,23 @@ void cov_thread_check(void)
 	write_unlock(&task_list_rwlock);
 }
 
+int cov_thread_effective(void)
+{
+	int effective = 0;
+	struct cov_thread *ct;
+
+	write_lock(&task_list_rwlock);
+	list_for_each_entry(ct, &task_list_root, list) {
+		if (ct->task == current) {
+			effective = ct->is_sample_effective;
+			break;
+		}
+	}
+	write_unlock(&task_list_rwlock);
+
+	return effective;
+}
+
 void cov_thread_exit(void)
 {
 	struct cov_thread *tmp, *next;
