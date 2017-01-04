@@ -3,6 +3,7 @@
 #include "checkpoint.h"
 #include "cov_thread.h"
 #include "./thread_buffer.h"
+#include "./config.h"
 
 /*
  * these probe handler should do this, increase the `hit` field of the
@@ -95,6 +96,10 @@ static int checkpoint_caller_add(struct checkpoint *cp, unsigned long address)
 }
 
 /*
+ * we should make these three functions less and quicker
+ */
+
+/*
  * for checkpoints in functions.
  */
 int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
@@ -110,12 +115,20 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 	write_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
 		if (tmp->this_kprobe == kp) {
+			write_unlock(&cproot_rwlock);
+			write_lock(&tmp->var_rwlock);
+			if (unlikely(!tmp->hit))
+				effective = 1;
 			tmp->hit++;
 			if (unlikely(!tmp->hit))
 				tmp->hit = 1;
+			write_unlock(&tmp->var_rwlock);
 
+#ifdef CTBUF_DEBUG
 			ctbuf_print("--------> %s\n", tmp->name);
+#endif
 
+#ifdef CP_CALLER
 			err = checkpoint_caller_add(tmp, 0);
 			if (unlikely(err == -2))
 				ctbuf_print("ERR: checkpoint_caller_add: %s\n",
@@ -124,6 +137,8 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 				ctbuf_print("NEW PATH: %s\n", tmp->name);
 				effective = 1;
 			}
+#endif
+			write_lock(&cproot_rwlock);
 			break;
 		}
 	}
@@ -132,10 +147,13 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 	write_lock(&task_list_rwlock);
 	list_for_each_entry(ct, &task_list_root, list) {
 		if (ct->task == current) {
+			write_unlock(&task_list_rwlock);
+			write_lock(&ct->var_rwlock);
 			ct->prev_addr = (unsigned long)kp->addr;
 			if (effective)
 				ct->is_sample_effective = 1;
-			break;
+			write_unlock(&ct->var_rwlock);
+			return 0;
 		}
 	}
 	write_unlock(&task_list_rwlock);
@@ -156,7 +174,9 @@ int cp_default_ret_hdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 	read_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
 		if (ri->rp == tmp->this_retprobe) {
+#ifdef CTBUF_DEBUG
 			ctbuf_print("<<<<<<<<< %s\n", tmp->name);
+#endif
 			break;
 		}
 	}
@@ -165,8 +185,11 @@ int cp_default_ret_hdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 	write_lock(&task_list_rwlock);
 	list_for_each_entry(ct, &task_list_root, list) {
 		if (ct->task == current) {
+			write_unlock(&task_list_rwlock);
+			write_lock(&ct->var_rwlock);
 			ct->prev_addr = (unsigned long)ri->ret_addr;
-			break;
+			write_unlock(&ct->var_rwlock);
+			return 0;
 		}
 	}
 	write_unlock(&task_list_rwlock);
@@ -197,15 +220,23 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 	write_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
 		if (tmp->this_retprobe == ri->rp) {
+			write_unlock(&cproot_rwlock);
+			write_lock(&tmp->var_rwlock);
+			if (unlikely(!tmp->hit))
+				effective = 1;
 			tmp->hit++;
 			if (unlikely(!tmp->hit))
 				tmp->hit = 1;
+			write_unlock(&tmp->var_rwlock);
 
+#ifdef CTBUF_DEBUG
 			ctbuf_print(">>>>>>>>> %s\n", tmp->name);
+#endif
 			/*
 			 * XXX: note that ri->ret_addr not the current caller addr.
 			 * so we should get the value [sp]
 			 */
+#ifdef CP_CALLER
 			err = checkpoint_caller_add(tmp,
 						    *(unsigned long *)regs->sp);
 			if (unlikely(err == -2))
@@ -218,6 +249,8 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 					    *(unsigned long *)regs->sp);
 				effective = 1;
 			}
+#endif
+			write_lock(&cproot_rwlock);
 			break;
 		}
 	}
@@ -226,10 +259,13 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 	write_lock(&task_list_rwlock);
 	list_for_each_entry(ct, &task_list_root, list) {
 		if (ct->task == current) {
+			write_unlock(&task_list_rwlock);
+			write_lock(&ct->var_rwlock);
 			ct->prev_addr = regs->ip;
 			if (effective)
 				ct->is_sample_effective = 1;
-			break;
+			write_unlock(&ct->var_rwlock);
+			return 0;
 		}
 	}
 	write_unlock(&task_list_rwlock);

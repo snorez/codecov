@@ -58,6 +58,9 @@ then we do nothing.
 
 # things doesn't do yet
 + output the path map
++ there is a bug that could take a high cpu usage and system doesn't response
+	I tried to make the handler quicker and shorter, if this still doesn't work
+	I will try to use workqueue to see if that could work.
 + ...
 
 # things can't not be done

@@ -10,6 +10,7 @@
 #include <asm/uaccess.h>
 #include <asm/insn.h>
 #include "./cov_thread.h"
+#include "./config.h"
 
 #define NAME_LEN_MAX	KSYM_NAME_LEN
 #define FUNC_LEN_MAX	KSYM_NAME_LEN
@@ -63,6 +64,7 @@ struct checkpoint {
 	struct list_head caller;	/* root of who called this probed point */
 	rwlock_t caller_rwlock;
 
+	rwlock_t var_rwlock;
 	unsigned long hit;		/* numbers been hit */
 	char *name;			/* checkpoint's specific name */
 	unsigned long level;

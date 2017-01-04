@@ -4,6 +4,7 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/list.h>
+#include <linux/types.h>
 
 /*
  * provide multi-thread support
@@ -22,6 +23,7 @@ struct cov_thread {
 	 * and then use `put_task_struct` to release the task_struct;
 	 */
 	struct task_struct *task;
+	rwlock_t var_rwlock;
 	char *buffer;
 	unsigned long sample_id;
 	unsigned long prev_addr;	/* for kprobe, not kretprobe */

@@ -93,6 +93,7 @@ static void do_set_jxx_probe(char *func, unsigned long base,
  */
 static void do_auto_add(char *func, unsigned long level)
 {
+#ifdef AUTO_ADD
 #ifdef CONFIG_X86_64
 	char name[KSYM_NAME_LEN], modname[KSYM_NAME_LEN];
 	unsigned long addr, size, offset, i = 0;
@@ -144,6 +145,7 @@ static void do_auto_add(char *func, unsigned long level)
 					 level);
 		i += insn.length;
 	}
+#endif
 #endif
 	return;
 }
@@ -216,6 +218,7 @@ static int do_checkpoint_add(char *name, char *func, unsigned long offset,
 	}
 
 	rwlock_init(&new->caller_rwlock);
+	rwlock_init(&new->var_rwlock);
 	INIT_LIST_HEAD(&new->caller);
 	new->level = level;
 	new->enabled = 1;
@@ -315,7 +318,9 @@ static void checkpoint_caller_cleanup(struct checkpoint *cp)
 	write_lock(&cp->caller_rwlock);
 	list_for_each_entry_safe(tmp, next, &cp->caller, caller_list) {
 		list_del(&tmp->caller_list);
+		write_unlock(&cp->caller_rwlock);
 		kfree(tmp);
+		write_lock(&cp->caller_rwlock);
 	}
 	INIT_LIST_HEAD(&cp->caller);
 	write_unlock(&cp->caller_rwlock);
@@ -334,6 +339,7 @@ void checkpoint_del(char *name)
 		if ((strlen(name) == strlen(tmp->name)) &&
 			!strcmp(tmp->name, name)) {
 			list_del(&tmp->siblings);
+			write_unlock(&cproot_rwlock);
 			checkpoint_caller_cleanup(tmp);
 
 			if (unlikely(tmp->this_kprobe)) {
@@ -345,6 +351,7 @@ void checkpoint_del(char *name)
 			}
 			kfree(tmp->name);
 			kfree(tmp);
+			write_lock(&cproot_rwlock);
 			break;
 		}
 	}
@@ -360,6 +367,7 @@ void checkpoint_restart(void)
 	write_lock(&cproot_rwlock);
 	list_for_each_entry_safe(tmp, next, &cproot, siblings) {
 		list_del(&tmp->siblings);
+		write_unlock(&cproot_rwlock);
 		checkpoint_caller_cleanup(tmp);
 		if (unlikely(tmp->this_kprobe)) {
 			unregister_kprobe(tmp->this_kprobe);
@@ -370,6 +378,7 @@ void checkpoint_restart(void)
 		}
 		kfree(tmp->name);
 		kfree(tmp);
+		write_lock(&cproot_rwlock);
 	}
 	INIT_LIST_HEAD(&cproot);
 	write_unlock(&cproot_rwlock);

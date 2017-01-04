@@ -29,6 +29,7 @@ int task_is_test_case(struct task_struct *task)
 				read_unlock(&task_list_rwlock);
 				return 1;
 			}
+			break;
 		}
 	}
 	read_unlock(&task_list_rwlock);
@@ -65,8 +66,9 @@ int cov_thread_add(unsigned long id, int is_test_case)
 	}
 	memset(new->buffer, 0, THREAD_BUFFER_SIZE);
 
-	write_lock(&task_list_rwlock);
+	rwlock_init(&new->var_rwlock);
 	get_task_struct(task);
+	write_lock(&task_list_rwlock);
 	list_add_tail(&new->list, &task_list_root);
 	write_unlock(&task_list_rwlock);
 
@@ -82,13 +84,15 @@ void cov_thread_del(void)
 	list_for_each_entry(ct, &task_list_root, list) {
 		if (ct->task == task) {
 			list_del(&ct->list);
+			write_unlock(&task_list_rwlock);
 			put_task_struct(ct->task);
 			kfree(ct->buffer);
 			kfree(ct);
-			break;
+			return;
 		}
 	}
 	write_unlock(&task_list_rwlock);
+
 }
 
 void cov_thread_check(void)
@@ -98,10 +102,12 @@ void cov_thread_check(void)
 	write_lock(&task_list_rwlock);
 	list_for_each_entry_safe(tmp, next, &task_list_root, list) {
 		if (atomic_read(&tmp->task->usage) == 1) {
-			put_task_struct(tmp->task);
 			list_del(&tmp->list);
+			write_unlock(&task_list_rwlock);
+			put_task_struct(tmp->task);
 			kfree(tmp->buffer);
 			kfree(tmp);
+			return;
 		}
 	}
 	write_unlock(&task_list_rwlock);
@@ -112,14 +118,14 @@ int cov_thread_effective(void)
 	int effective = 0;
 	struct cov_thread *ct;
 
-	write_lock(&task_list_rwlock);
+	read_lock(&task_list_rwlock);
 	list_for_each_entry(ct, &task_list_root, list) {
 		if (ct->task == current) {
 			effective = ct->is_sample_effective;
 			break;
 		}
 	}
-	write_unlock(&task_list_rwlock);
+	read_unlock(&task_list_rwlock);
 
 	return effective;
 }
@@ -135,10 +141,12 @@ void cov_thread_exit(void)
 	 */
 	write_lock(&task_list_rwlock);
 	list_for_each_entry_safe(tmp, next, &task_list_root, list) {
-		put_task_struct(tmp->task);
 		list_del(&tmp->list);
+		write_unlock(&task_list_rwlock);
+		put_task_struct(tmp->task);
 		kfree(tmp->buffer);
 		kfree(tmp);
+		write_lock(&task_list_rwlock);
 	}
 	INIT_LIST_HEAD(&task_list_root);
 	write_unlock(&task_list_rwlock);
