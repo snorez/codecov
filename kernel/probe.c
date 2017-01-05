@@ -13,17 +13,19 @@
 static int address_in_caller(struct checkpoint *cp, unsigned long address)
 {
 	struct checkpoint_caller *tmp;
-	int err = 0;
+	int i = 0;
 
-	read_lock(&cp->caller_rwlock);
-	list_for_each_entry(tmp, &cp->caller, caller_list) {
-		if (address == tmp->address) {
-			err = 1;
-			break;
+	for (i = 0; i < CP_CALLER_MAX; i++) {
+		tmp = &cp->caller[i];
+
+		if (!atomic_read(&tmp->in_use))
+			continue;
+
+		if ((unsigned long)atomic64_read(&tmp->address) == address) {
+			return 1;
 		}
 	}
-	read_unlock(&cp->caller_rwlock);
-	return err;
+	return 0;
 }
 
 /*
@@ -42,42 +44,54 @@ static int checkpoint_caller_add(struct checkpoint *cp, unsigned long address)
 	 * check if the address already exists in cp->caller
 	 * add a structure checkpoint_caller
 	 */
-	struct checkpoint_caller *new;
+	struct checkpoint_caller *new = NULL, *tmp0;
 	struct task_struct *task = current;
 	struct cov_thread *ct = NULL, *tmp;
 	int (*get_symbol_via_address)(unsigned long, char *);
 	int err;
 	unsigned long id;
 	int no_name = 0;
+	int i = 0;
 
-	read_lock(&task_list_rwlock);
-	list_for_each_entry(tmp, &task_list_root, list) {
-		if (tmp->task == task) {
-			ct = tmp;
-			break;
-		}
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		tmp = &threads[i];
+
+		if (!atomic_read(&tmp->in_use))
+			continue;
+
+		if (tmp->task != task)
+			continue;
+
+		ct = tmp;
+		break;
 	}
 	if (unlikely(!ct)) {
 		/* may never happen */
-		read_unlock(&task_list_rwlock);
 		return -2;
 	} else {
 		id = ct->sample_id;
 		if (!address) {
-			address = ct->prev_addr;
+			address = atomic64_read(&ct->prev_addr);
 			no_name = 1;
 		}
 	}
-	read_unlock(&task_list_rwlock);
 
 	if (address_in_caller(cp, address))
 		return -1;
 
-	/* XXX: why kmalloc would get stuck? */
-	new = kzalloc(sizeof(*new), GFP_ATOMIC);
-	if (unlikely(!new))
+	for (i = 0; i < CP_CALLER_MAX; i++) {
+		tmp0 = &cp->caller[i];
+
+		if (test_and_set_bit(0,
+				(volatile unsigned long *)&(tmp0->in_use.counter)))
+			continue;
+
+		new = tmp0;
+		break;
+	}
+	if (!new)
 		return -2;
-	new->sample_id = id;
+	atomic64_set(&new->sample_id, id);
 
 	if (!no_name) {
 		get_symbol_via_address =
@@ -86,18 +100,10 @@ static int checkpoint_caller_add(struct checkpoint *cp, unsigned long address)
 		if (unlikely(err))
 			memset(new->name, 0, KSYM_NAME_LEN);
 	}
-	new->address = address;
-
-	write_lock(&cp->caller_rwlock);
-	list_add_tail(&new->caller_list, &cp->caller);
-	write_unlock(&cp->caller_rwlock);
+	atomic64_set(&new->address, address);
 
 	return 0;
 }
-
-/*
- * we should make these three functions less and quicker
- */
 
 /*
  * for checkpoints in functions.
@@ -108,21 +114,16 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 	struct cov_thread *ct;
 	int err;
 	int effective = 0;
+	int i = 0;
 
 	if (!task_is_test_case(current))
 		return 0;
 
-	write_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
 		if (tmp->this_kprobe == kp) {
-			write_unlock(&cproot_rwlock);
-			write_lock(&tmp->var_rwlock);
-			if (unlikely(!tmp->hit))
+			if (!test_and_set_bit(0,
+				(volatile unsigned long *)&(tmp->hit.counter)))
 				effective = 1;
-			tmp->hit++;
-			if (unlikely(!tmp->hit))
-				tmp->hit = 1;
-			write_unlock(&tmp->var_rwlock);
 
 #ifdef CTBUF_DEBUG
 			ctbuf_print("--------> %s\n", tmp->name);
@@ -138,25 +139,24 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 				effective = 1;
 			}
 #endif
-			write_lock(&cproot_rwlock);
 			break;
 		}
 	}
-	write_unlock(&cproot_rwlock);
 
-	write_lock(&task_list_rwlock);
-	list_for_each_entry(ct, &task_list_root, list) {
-		if (ct->task == current) {
-			write_unlock(&task_list_rwlock);
-			write_lock(&ct->var_rwlock);
-			ct->prev_addr = (unsigned long)kp->addr;
-			if (effective)
-				ct->is_sample_effective = 1;
-			write_unlock(&ct->var_rwlock);
-			return 0;
-		}
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		ct = &threads[i];
+
+		if (!atomic_read(&ct->in_use))
+			continue;
+
+		if (ct->task != current)
+			continue;
+
+		atomic64_set(&ct->prev_addr, (unsigned long)kp->addr);
+		if (effective)
+			atomic_set(&ct->is_sample_effective, 1);
+		break;
 	}
-	write_unlock(&task_list_rwlock);
 
 	return 0;
 }
@@ -168,10 +168,11 @@ int cp_default_ret_hdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
 	struct cov_thread *ct;
 	struct checkpoint *tmp;
+	int i = 0;
+
 	if (!task_is_test_case(current))
 		return 0;
 
-	read_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
 		if (ri->rp == tmp->this_retprobe) {
 #ifdef CTBUF_DEBUG
@@ -180,19 +181,19 @@ int cp_default_ret_hdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 			break;
 		}
 	}
-	read_unlock(&cproot_rwlock);
 
-	write_lock(&task_list_rwlock);
-	list_for_each_entry(ct, &task_list_root, list) {
-		if (ct->task == current) {
-			write_unlock(&task_list_rwlock);
-			write_lock(&ct->var_rwlock);
-			ct->prev_addr = (unsigned long)ri->ret_addr;
-			write_unlock(&ct->var_rwlock);
-			return 0;
-		}
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		ct = &threads[i];
+
+		if (!atomic_read(&ct->in_use))
+			continue;
+
+		if (ct->task != current)
+			continue;
+
+		atomic64_set(&ct->prev_addr, (unsigned long)ri->ret_addr);
+		break;
 	}
-	write_unlock(&task_list_rwlock);
 
 	return 0;
 }
@@ -213,21 +214,16 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 	struct cov_thread *ct;
 	int err;
 	int effective = 0;
+	int i = 0;
 
 	if (!task_is_test_case(current))
 		return 0;
 
-	write_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
 		if (tmp->this_retprobe == ri->rp) {
-			write_unlock(&cproot_rwlock);
-			write_lock(&tmp->var_rwlock);
-			if (unlikely(!tmp->hit))
+			if (!test_and_set_bit(0,
+				(volatile unsigned long *)&(tmp->hit.counter)))
 				effective = 1;
-			tmp->hit++;
-			if (unlikely(!tmp->hit))
-				tmp->hit = 1;
-			write_unlock(&tmp->var_rwlock);
 
 #ifdef CTBUF_DEBUG
 			ctbuf_print(">>>>>>>>> %s\n", tmp->name);
@@ -250,25 +246,24 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 				effective = 1;
 			}
 #endif
-			write_lock(&cproot_rwlock);
 			break;
 		}
 	}
-	write_unlock(&cproot_rwlock);
 
-	write_lock(&task_list_rwlock);
-	list_for_each_entry(ct, &task_list_root, list) {
-		if (ct->task == current) {
-			write_unlock(&task_list_rwlock);
-			write_lock(&ct->var_rwlock);
-			ct->prev_addr = regs->ip;
-			if (effective)
-				ct->is_sample_effective = 1;
-			write_unlock(&ct->var_rwlock);
-			return 0;
-		}
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		ct = &threads[i];
+
+		if (!atomic_read(&ct->in_use))
+			continue;
+
+		if (ct->task != current)
+			continue;
+
+		atomic64_set(&ct->prev_addr, regs->ip);
+		if (effective)
+			atomic_set(&ct->is_sample_effective, 1);
+		break;
 	}
-	write_unlock(&task_list_rwlock);
 
 	return 0;
 }

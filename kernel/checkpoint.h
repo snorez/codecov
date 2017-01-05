@@ -9,6 +9,7 @@
 #include <linux/kallsyms.h>
 #include <asm/uaccess.h>
 #include <asm/insn.h>
+#include <linux/atomic.h>
 #include "./cov_thread.h"
 #include "./config.h"
 
@@ -59,28 +60,27 @@ enum jxx_2 {
 	JG_OPC1		= 0x8f,	//Jvds
 };
 
+#define CP_CALLER_MAX	64
+struct checkpoint_caller {
+	atomic_t in_use;		/* use test_and_set_bit set this value */
+	char name[KSYM_NAME_LEN];	/* caller function name */
+	atomic64_t address;		/* specific */
+	atomic64_t sample_id;		/* identify sample trigger this first */
+};
+
 struct checkpoint {
 	struct list_head siblings;
-	struct list_head caller;	/* root of who called this probed point */
-	rwlock_t caller_rwlock;
+	struct checkpoint_caller caller[CP_CALLER_MAX];
+					/* root of who called this probed point */
 
-	rwlock_t var_rwlock;
-	unsigned long hit;		/* numbers been hit */
 	char *name;			/* checkpoint's specific name */
 	unsigned long level;
-	unsigned long enabled;
+	atomic_t hit;			/* numbers been hit */
+	atomic_t enabled;
 	struct kprobe *this_kprobe;	/* used inside a function */
 	struct kretprobe *this_retprobe;/* against this_kprobe, used on func */
 };
 extern struct list_head cproot;
-extern rwlock_t cproot_rwlock;
-
-struct checkpoint_caller {
-	struct list_head caller_list;
-	char name[KSYM_NAME_LEN];	/* caller function name */
-	unsigned long address;		/* specific */
-	unsigned long sample_id;	/* identify sample trigger this first */
-};
 
 struct checkpoint_user {
 	size_t name_len;

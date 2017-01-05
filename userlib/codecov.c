@@ -36,6 +36,9 @@ int cov_register(unsigned long id, int is_test_case)
 	return err;
 }
 
+/*
+ * TODO: make sure there is only one process running now
+ */
 int cov_check(void)
 {
 	return ioctl(cov_fd, COV_CHECK, 0);

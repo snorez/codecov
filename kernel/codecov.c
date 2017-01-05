@@ -197,12 +197,14 @@ static struct file_operations cov_ops = {
 static int __init codecov_init(void)
 {
 	/* TODO */
+	if (cov_thread_init())
+		return -1;
+
 	cov_entry = debugfs_create_file("codecov_entry", S_IRWXU | S_IROTH, NULL,
 					NULL, &cov_ops);
 	if (unlikely(!cov_entry))
 		return -1;
 
-	cov_thread_init();
 	checkpoint_init();
 
 	return 0;

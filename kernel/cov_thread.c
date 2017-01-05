@@ -1,153 +1,176 @@
 #include "./cov_thread.h"
 
-struct list_head task_list_root;
-rwlock_t task_list_rwlock;
+struct cov_thread threads[COV_THREAD_MAX];
 
 int task_in_list(struct task_struct *task)
 {
 	struct cov_thread *ct;
+	int i = 0;
 
-	read_lock(&task_list_rwlock);
-	list_for_each_entry(ct, &task_list_root, list) {
-		if (ct->task == task) {
-			read_unlock(&task_list_rwlock);
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		ct = &threads[i];
+
+		if (!atomic_read(&ct->in_use))
+			continue;
+
+		if (ct->task == task)
 			return 1;
-		}
 	}
-	read_unlock(&task_list_rwlock);
+
 	return 0;
 }
 
 int task_is_test_case(struct task_struct *task)
 {
 	struct cov_thread *ct;
+	int i = 0;
 
-	read_lock(&task_list_rwlock);
-	list_for_each_entry(ct, &task_list_root, list) {
-		if (ct->task == task) {
-			if (ct->is_test_case) {
-				read_unlock(&task_list_rwlock);
-				return 1;
-			}
-			break;
-		}
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		ct = &threads[i];
+
+		if (!atomic_read(&ct->in_use))
+			continue;
+
+		if (ct->task != task)
+			continue;
+
+		return ct->is_test_case;
 	}
-	read_unlock(&task_list_rwlock);
 	return 0;
 }
 
-void cov_thread_init(void)
+int cov_thread_init(void)
 {
-	INIT_LIST_HEAD(&task_list_root);
-	rwlock_init(&task_list_rwlock);
+	int err = 0, i = 0;
+	struct cov_thread *ct;
+
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		ct = &threads[i];
+
+		ct->buffer = kzalloc(THREAD_BUFFER_SIZE, GFP_KERNEL);
+		if (!ct->buffer) {
+			err = -ENOMEM;
+			break;
+		}
+	}
+
+	if (err) {
+		for (; i > 0; i--) {
+			ct = &threads[i-1];
+			kfree(ct->buffer);
+		}
+	}
+
+	return err;
 }
 
 int cov_thread_add(unsigned long id, int is_test_case)
 {
 	struct task_struct *task = current;
-	struct cov_thread *new;
+	struct cov_thread *ct;
+	int i = 0;
 
 	if (unlikely(task_in_list(task)))
 		return -EEXIST;
 
-	new = kmalloc(sizeof(*new), GFP_KERNEL);
-	if (unlikely(!new))
-		return -ENOMEM;
-	memset(new, 0, sizeof(*new));
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		ct = &threads[i];
 
-	new->task = task;
-	new->sample_id = id;
-	new->is_test_case = is_test_case;
+		if (test_and_set_bit(0,
+				(volatile unsigned long *)&(ct->in_use.counter)))
+			continue;
 
-	new->buffer = kmalloc(THREAD_BUFFER_SIZE, GFP_KERNEL);
-	if (unlikely(!new->buffer)) {
-		kfree(new);
-		return -ENOMEM;
+		get_task_struct(task);
+		ct->task = task;
+		ct->sample_id = id;
+		ct->is_test_case = is_test_case;
+		atomic_set(&ct->is_sample_effective, 0);
+		atomic64_set(&ct->prev_addr, 0);
+		memset(ct->buffer, 0, THREAD_BUFFER_SIZE);
+
+		return 0;
 	}
-	memset(new->buffer, 0, THREAD_BUFFER_SIZE);
 
-	rwlock_init(&new->var_rwlock);
-	get_task_struct(task);
-	write_lock(&task_list_rwlock);
-	list_add_tail(&new->list, &task_list_root);
-	write_unlock(&task_list_rwlock);
-
-	return 0;
+	return -EBUSY;
 }
 
 void cov_thread_del(void)
 {
 	struct task_struct *task = current;
 	struct cov_thread *ct;
+	int i = 0;
 
-	write_lock(&task_list_rwlock);
-	list_for_each_entry(ct, &task_list_root, list) {
-		if (ct->task == task) {
-			list_del(&ct->list);
-			write_unlock(&task_list_rwlock);
-			put_task_struct(ct->task);
-			kfree(ct->buffer);
-			kfree(ct);
-			return;
-		}
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		ct = &threads[i];
+
+		if (!atomic_read(&ct->in_use))
+			continue;
+
+		if (ct->task != task)
+			continue;
+
+		put_task_struct(ct->task);
+		ct->task = NULL;
+		atomic_set(&ct->is_sample_effective, 0);
+		atomic64_set(&ct->prev_addr, 0);
+		ct->sample_id = 0;
+		ct->is_test_case = 0;
+		test_and_clear_bit(0,
+				(volatile unsigned long *)&(ct->in_use.counter));
 	}
-	write_unlock(&task_list_rwlock);
-
 }
 
+/*
+ * TODO: make sure there is only one process running now
+ */
 void cov_thread_check(void)
 {
-	struct cov_thread *tmp, *next;
+	struct cov_thread *ct;
+	int i = 0;
 
-	write_lock(&task_list_rwlock);
-	list_for_each_entry_safe(tmp, next, &task_list_root, list) {
-		if (atomic_read(&tmp->task->usage) == 1) {
-			list_del(&tmp->list);
-			write_unlock(&task_list_rwlock);
-			put_task_struct(tmp->task);
-			kfree(tmp->buffer);
-			kfree(tmp);
-			return;
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		ct = &threads[i];
+
+		if (!atomic_read(&ct->in_use))
+			continue;
+
+		if (atomic_read(&ct->task->usage) == 1) {
+			put_task_struct(ct->task);
+			test_and_clear_bit(0,
+				(volatile unsigned long *)&(ct->in_use.counter));
 		}
 	}
-	write_unlock(&task_list_rwlock);
 }
 
 int cov_thread_effective(void)
 {
 	int effective = 0;
 	struct cov_thread *ct;
+	int i = 0;
 
-	read_lock(&task_list_rwlock);
-	list_for_each_entry(ct, &task_list_root, list) {
-		if (ct->task == current) {
-			effective = ct->is_sample_effective;
-			break;
-		}
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		ct = &threads[i];
+
+		if (!atomic_read(&ct->in_use))
+			continue;
+
+		if (ct->task != current)
+			continue;
+
+		effective = atomic_read(&ct->is_sample_effective);
 	}
-	read_unlock(&task_list_rwlock);
 
 	return effective;
 }
 
 void cov_thread_exit(void)
 {
-	struct cov_thread *tmp, *next;
+	struct cov_thread *ct;
+	int i = 0;
 
-	/*
-	 * we should also check the list, to see if any task_struct->usage
-	 * is 1, that means the process has exited, userspace forget to call
-	 * cov_unregister.
-	 */
-	write_lock(&task_list_rwlock);
-	list_for_each_entry_safe(tmp, next, &task_list_root, list) {
-		list_del(&tmp->list);
-		write_unlock(&task_list_rwlock);
-		put_task_struct(tmp->task);
-		kfree(tmp->buffer);
-		kfree(tmp);
-		write_lock(&task_list_rwlock);
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		ct = &threads[i];
+
+		kfree(ct->buffer);
 	}
-	INIT_LIST_HEAD(&task_list_root);
-	write_unlock(&task_list_rwlock);
 }

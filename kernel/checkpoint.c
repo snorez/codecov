@@ -1,27 +1,22 @@
 #include "checkpoint.h"
 
 struct list_head cproot;	/* all checkpoint we have probed */
-rwlock_t cproot_rwlock;
 
 void checkpoint_init(void)
 {
 	INIT_LIST_HEAD(&cproot);
-	rwlock_init(&cproot_rwlock);
 }
 
 static int name_in_cplist(char *name)
 {
 	struct checkpoint *tmp;
 
-	read_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
 		if ((strlen(name) == strlen(tmp->name)) &&
 			!strcmp(tmp->name, name)) {
-			read_unlock(&cproot_rwlock);
 			return 1;
 		}
 	}
-	read_unlock(&cproot_rwlock);
 
 	return 0;
 }
@@ -168,10 +163,9 @@ static int do_checkpoint_add(char *name, char *func, unsigned long offset,
 	if (name_in_cplist(name))
 		return -EEXIST;
 
-	new = kmalloc(sizeof(struct checkpoint), GFP_KERNEL);
+	new = kzalloc(sizeof(struct checkpoint), GFP_KERNEL);
 	if (unlikely(!new))
 		return -ENOMEM;
-	memset(new, 0, sizeof(struct checkpoint));
 
 	err = -EINVAL;
 	name_len = strlen(name);
@@ -217,15 +211,11 @@ static int do_checkpoint_add(char *name, char *func, unsigned long offset,
 			goto err_free3;
 	}
 
-	rwlock_init(&new->caller_rwlock);
-	rwlock_init(&new->var_rwlock);
-	INIT_LIST_HEAD(&new->caller);
 	new->level = level;
-	new->enabled = 1;
+	atomic_set(&new->hit, 0);
+	atomic_set(&new->enabled, 1);
 
-	write_lock(&cproot_rwlock);
 	list_add_tail(&new->siblings, &cproot);
-	write_unlock(&cproot_rwlock);
 	return 0;
 
 err_free3:
@@ -274,7 +264,6 @@ int checkpoint_xstate(unsigned long name, unsigned long len, unsigned long enabl
 	}
 
 	if (name) {
-		write_lock(&cproot_rwlock);
 		list_for_each_entry(cp, &cproot, siblings) {
 			if (((strlen(cp->name) == strlen(cp_name)) &&
 				(!strncmp(cp->name, cp_name, strlen(cp_name)))) ||
@@ -287,14 +276,12 @@ int checkpoint_xstate(unsigned long name, unsigned long len, unsigned long enabl
 				else if (cp->this_retprobe)
 					err = func_kretp(cp->this_retprobe);
 				if (!err)
-					cp->enabled = !!enable;
+					atomic_set(&cp->enabled, !!enable);
 				else
 					break;
 			}
 		}
-		write_unlock(&cproot_rwlock);
 	} else {
-		write_lock(&cproot_rwlock);
 		list_for_each_entry(cp, &cproot, siblings) {
 			if (cp->this_kprobe)
 				err = func_kp(cp->this_kprobe);
@@ -304,26 +291,22 @@ int checkpoint_xstate(unsigned long name, unsigned long len, unsigned long enabl
 			if (err)
 				break;
 			else
-				cp->enabled = !!enable;
+				atomic_set(&cp->enabled, !!enable);
 		}
-		write_unlock(&cproot_rwlock);
 	}
 	return err;
 }
 
 static void checkpoint_caller_cleanup(struct checkpoint *cp)
 {
-	struct checkpoint_caller *tmp, *next;
+	int i = 0;
+	struct checkpoint_caller *tmp;
 
-	write_lock(&cp->caller_rwlock);
-	list_for_each_entry_safe(tmp, next, &cp->caller, caller_list) {
-		list_del(&tmp->caller_list);
-		write_unlock(&cp->caller_rwlock);
-		kfree(tmp);
-		write_lock(&cp->caller_rwlock);
+	for (i = 0; i < CP_CALLER_MAX; i++) {
+		tmp = &cp->caller[i];
+		test_and_clear_bit(0,
+				(volatile unsigned long *)&(tmp->in_use.counter));
 	}
-	INIT_LIST_HEAD(&cp->caller);
-	write_unlock(&cp->caller_rwlock);
 }
 
 void checkpoint_del(char *name)
@@ -334,12 +317,10 @@ void checkpoint_del(char *name)
 	 * XXX:here we do not need list_for_each_entry_safe,
 	 * because when we find the target checkpoint, we jump out the loop
 	 */
-	write_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
 		if ((strlen(name) == strlen(tmp->name)) &&
 			!strcmp(tmp->name, name)) {
 			list_del(&tmp->siblings);
-			write_unlock(&cproot_rwlock);
 			checkpoint_caller_cleanup(tmp);
 
 			if (unlikely(tmp->this_kprobe)) {
@@ -351,23 +332,17 @@ void checkpoint_del(char *name)
 			}
 			kfree(tmp->name);
 			kfree(tmp);
-			write_lock(&cproot_rwlock);
 			break;
 		}
 	}
-	write_unlock(&cproot_rwlock);
 }
 
 void checkpoint_restart(void)
 {
 	struct checkpoint *tmp, *next;
 
-	/* TODO: need to check cphit_root */
-
-	write_lock(&cproot_rwlock);
 	list_for_each_entry_safe(tmp, next, &cproot, siblings) {
 		list_del(&tmp->siblings);
-		write_unlock(&cproot_rwlock);
 		checkpoint_caller_cleanup(tmp);
 		if (unlikely(tmp->this_kprobe)) {
 			unregister_kprobe(tmp->this_kprobe);
@@ -378,10 +353,8 @@ void checkpoint_restart(void)
 		}
 		kfree(tmp->name);
 		kfree(tmp);
-		write_lock(&cproot_rwlock);
 	}
 	INIT_LIST_HEAD(&cproot);
-	write_unlock(&cproot_rwlock);
 }
 
 /* this function actually returns the number of functions been hit */
@@ -390,12 +363,10 @@ unsigned long checkpoint_get_numhit(void)
 	unsigned long num = 0;
 	struct checkpoint *tmp;
 
-	read_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
-		if (tmp->hit)
+		if (atomic_read(&tmp->hit))
 			num++;
 	}
-	read_unlock(&cproot_rwlock);
 
 	return num;
 }
@@ -405,10 +376,8 @@ unsigned long checkpoint_count(void)
 	unsigned long num = 0;
 	struct checkpoint *tmp;
 
-	read_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings)
 		num++;
-	read_unlock(&cproot_rwlock);
 
 	return num;
 }
@@ -418,15 +387,15 @@ unsigned long path_count(void)
 	unsigned long num = 0;
 	struct checkpoint *tmp;
 	struct checkpoint_caller *tmp_caller;
+	int i = 0;
 
-	read_lock(&cproot_rwlock);
 	list_for_each_entry(tmp, &cproot, siblings) {
-		read_lock(&tmp->caller_rwlock);
-		list_for_each_entry(tmp_caller, &tmp->caller, caller_list)
-			num++;
-		read_unlock(&tmp->caller_rwlock);
+		for (i = 0; i < CP_CALLER_MAX; i++) {
+			tmp_caller = &tmp->caller[i];
+			if (atomic_read(&tmp_caller->in_use))
+				num++;
+		}
 	}
-	read_unlock(&cproot_rwlock);
 
 	return num;
 }
@@ -436,19 +405,18 @@ unsigned long get_cp_status(char *name, enum status_opt option)
 	unsigned long ret = -1;
 	struct checkpoint *cp;
 
-	read_lock(&cproot_rwlock);
 	list_for_each_entry(cp, &cproot, siblings) {
 		if ((strlen(cp->name) == strlen(name)) &&
 			(!strncmp(cp->name, name, strlen(name)))) {
 			switch (option) {
 			case STATUS_HIT:
-				ret = cp->hit;
+				ret = atomic_read(&cp->hit);
 				break;
 			case STATUS_LEVEL:
 				ret = cp->level;
 				break;
 			case STATUS_ENABLED:
-				ret = cp->enabled;
+				ret = atomic_read(&cp->enabled);
 				break;
 			default:
 				ret = -1;
@@ -456,7 +424,6 @@ unsigned long get_cp_status(char *name, enum status_opt option)
 			break;
 		}
 	}
-	read_unlock(&cproot_rwlock);
 	return ret;
 }
 
@@ -479,21 +446,25 @@ int get_next_unhit_func(char __user *buf, size_t len, size_t skip,
 	size_t name_len;
 	struct cov_thread *ct;
 	struct checkpoint *cp;
+	int i = 0;
 
 	err = -EBUSY;
-	read_lock(&task_list_rwlock);
-	list_for_each_entry(ct, &task_list_root, list) {
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		ct = &threads[i];
+
+		if (!atomic_read(&ct->in_use))
+			continue;
 		num++;
 		if (num > 1)
-			goto unlock_ret;
+			goto out;
 	}
+
 	err = -ESRCH;
 	if (!num)
-		goto unlock_ret;
+		goto out;
 
-	read_lock(&cproot_rwlock);
 	list_for_each_entry(cp, &cproot, siblings) {
-		if ((!cp->hit) && (!strchr(cp->name, '#'))) {
+		if ((!atomic_read(&cp->hit)) && (!strchr(cp->name, '#'))) {
 			if (!has_level(cp, level))
 				continue;
 			if (!skip) {
@@ -503,22 +474,21 @@ int get_next_unhit_func(char __user *buf, size_t len, size_t skip,
 			skip--;
 		}
 	}
-	read_unlock(&cproot_rwlock);
+
 	err = -ENOENT;
 	if (!found)
-		goto unlock_ret;
+		goto out;
 
 	err = -EINVAL;
 	name_len = strlen(cp->name) + 1;
 	if (len < name_len)
-		goto unlock_ret;
+		goto out;
 
 	err = 0;
 	if (copy_to_user(buf, cp->name, name_len))
 		err = -EFAULT;
 
-unlock_ret:
-	read_unlock(&task_list_rwlock);
+out:
 	return err;
 }
 
@@ -529,21 +499,26 @@ int get_next_unhit_cp(char __user *buf, size_t len, size_t skip,
 	size_t name_len;
 	struct cov_thread *ct;
 	struct checkpoint *cp;
+	int i = 0;
 
 	err = -EBUSY;
-	read_lock(&task_list_rwlock);
-	list_for_each_entry(ct, &task_list_root, list) {
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		ct = &threads[i];
+
+		if (!atomic_read(&ct->in_use))
+			continue;
+
 		num++;
 		if (num > 1)
-			goto unlock_ret;
+			goto out;
 	}
+
 	err = -ESRCH;
 	if (!num)
-		goto unlock_ret;
+		goto out;
 
-	read_lock(&cproot_rwlock);
 	list_for_each_entry(cp, &cproot, siblings) {
-		if (!cp->hit) {
+		if (!atomic_read(&cp->hit)) {
 			if (!has_level(cp, level))
 				continue;
 			if (!skip) {
@@ -553,22 +528,20 @@ int get_next_unhit_cp(char __user *buf, size_t len, size_t skip,
 			skip--;
 		}
 	}
-	read_unlock(&cproot_rwlock);
 	err = -ENOENT;
 	if (!found)
-		goto unlock_ret;
+		goto out;
 
 	err = -EINVAL;
 	name_len = strlen(cp->name) + 1;
 	if (len < name_len)
-		goto unlock_ret;
+		goto out;
 
 	err = 0;
 	if (copy_to_user(buf, cp->name, name_len))
 		err = -EFAULT;
 
-unlock_ret:
-	read_unlock(&task_list_rwlock);
+out:
 	return err;
 }
 
@@ -582,63 +555,70 @@ int get_path_map(char __user *buf, size_t __user *len)
 	struct cov_thread *ct;
 	struct checkpoint *cp;
 	char *buf_tmp = NULL;
+	int i = 0;
 
 	err = -EBUSY;
-	read_lock(&task_list_rwlock);
-	list_for_each_entry(ct, &task_list_root, list) {
+	for (i = 0; i < COV_THREAD_MAX; i++) {
+		ct = &threads[i];
+
+		if (!atomic_read(&ct->in_use))
+			continue;
+
 		num++;
 		if (num > 1)
-			goto unlock_ret;
+			goto out;
 	}
+
 	err = -ESRCH;
 	if (!num)
-		goto unlock_ret;
+		goto out;
 
 	err = -EFAULT;
 	if (copy_from_user(&len_tmp, len, sizeof(size_t)))
-		goto unlock_ret;
+		goto out;
 
 	/* use +: as the seperator, cp->name+caller_name+caller_addr+:NEXT */
-	read_lock(&cproot_rwlock);
 	list_for_each_entry(cp, &cproot, siblings) {
 		struct checkpoint_caller *cpcaller;
+		int j = 0;
 
 		if (cp->name)
 			len_need += strlen(cp->name);
 		else
 			len_need += strlen("NULL");
 
-		read_lock(&cp->caller_rwlock);
-		list_for_each_entry(cpcaller, &cp->caller, caller_list) {
-			len_need += 1;		/* for + */
+		for (j = 0; j < CP_CALLER_MAX; j++) {
+			cpcaller = &cp->caller[j];
+
+			if (!atomic_read(&cpcaller->in_use))
+				continue;
+
+			len_need += 1;
 			if (cpcaller->name[0])
 				len_need += strlen(cpcaller->name);
 			else
 				len_need += strlen("NULL");
 			len_need += 16 + 2;	/* for 0x */
 		}
-		read_unlock(&cp->caller_rwlock);
 		len_need += 1;	/* for : */
 	}
-	read_unlock(&cproot_rwlock);
 	len_need += 1;	/* for \0 */
 
 	err = -EAGAIN;
 	if (len_tmp < len_need) {
 		if (copy_to_user(len, &len_need, sizeof(size_t)))
 			err = -EFAULT;
-		goto unlock_ret;
+		goto out;
 	}
 
 	err = -ENOMEM;
-	buf_tmp = kmalloc(len_need, GFP_KERNEL);
+	buf_tmp = kzalloc(len_need, GFP_KERNEL);
 	if (!buf_tmp)
-		goto unlock_ret;
-	memset(buf_tmp, 0, len_need);
+		goto out;
 
-	read_lock(&cproot_rwlock);
 	list_for_each_entry(cp, &cproot, siblings) {
 		struct checkpoint_caller *cpcaller;
+		int j = 0;
 
 		if (cp->name) {
 			memcpy(buf_tmp+copid, cp->name, strlen(cp->name));
@@ -648,8 +628,12 @@ int get_path_map(char __user *buf, size_t __user *len)
 			copid += 4;
 		}
 
-		read_lock(&cp->caller_rwlock);
-		list_for_each_entry(cpcaller, &cp->caller, caller_list) {
+		for (j = 0; j < CP_CALLER_MAX; j++) {
+			cpcaller = &cp->caller[j];
+
+			if (!atomic_read(&cpcaller->in_use))
+				continue;
+
 			memcpy(buf_tmp+copid, "+", 1);
 			copid += 1;
 
@@ -661,21 +645,20 @@ int get_path_map(char __user *buf, size_t __user *len)
 				memcpy(buf_tmp+copid, "NULL", 4);
 				copid += 4;
 			}
-			sprintf(buf_tmp+copid, "0x%016lx", cpcaller->address);
+			sprintf(buf_tmp+copid, "0x%016lx",
+				atomic64_read(&cpcaller->address));
 			copid += 16 + 2;
 		}
-		read_unlock(&cp->caller_rwlock);
+
 		memcpy(buf_tmp+copid, ":", 1);
 		copid += 1;
 	}
-	read_unlock(&cproot_rwlock);
 
 	err = 0;
 	if (copy_to_user(buf, buf_tmp, copid+1))
 		err = -EFAULT;
 
-unlock_ret:
-	read_unlock(&task_list_rwlock);
+out:
 	kfree(buf_tmp);
 	return err;
 }
