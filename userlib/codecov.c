@@ -144,7 +144,49 @@ int cov_buffer_print(void)
 	if (err == -1)
 		return -1;
 
-	printf("%s\n", log_buffer);
+	fprintf(stderr, "%s\n", log_buffer);
+	return 0;
+}
+
+int cov_buffer_print_pretty(void)
+{
+	memset(log_buffer, 0, THREAD_BUFFER_SIZE);
+	int err = cov_get_buffer(log_buffer, THREAD_BUFFER_SIZE);
+	if (err == -1)
+		return -1;
+	const char *in_str = ">>>>>>>>> ";
+	const char *out_str = "<<<<<<<<< ";
+
+	int tab = 0;
+	char *start = log_buffer;
+	char *line, *end = start + strlen(start);
+	while (start < end) {
+		char *b;
+		line = strchr(start, '\n');
+		if (!line) {
+			fprintf(stderr, "this should never happen\n");
+			break;
+		}
+		*line = 0;
+
+		if (strstr(start, "NEW PATH")) {
+			start = line + 1;
+			continue;
+		}
+
+		if (b = strstr(start, in_str)) {
+			for (int i = 0; i < tab; i++)
+				fprintf(stderr, "----");
+			fprintf(stderr, "%s\n", b+strlen(in_str));
+			tab++;
+		} else if (b = strstr(start, out_str)) {
+			tab--;
+			for (int i = 0; i < tab; i++)
+				fprintf(stderr, "----");
+			fprintf(stderr, "%s\n", b+strlen(out_str));
+		}
+		start = line + 1;
+	}
 	return 0;
 }
 
@@ -216,7 +258,7 @@ void output_path_map(char *buf, size_t len)
 		while (add = strchr(start, '+')) {
 			*add = 0;
 			for (int i = 0; i < tab; i++)
-				fprintf(stderr, "\t");
+				fprintf(stderr, "----");
 			tab = 1;
 			fprintf(stderr, "%s\n", start);
 			start = add+1;
@@ -224,7 +266,7 @@ void output_path_map(char *buf, size_t len)
 		if (!tab)
 			goto next_loop;
 		for (int i = 0; i < tab; i++)
-			fprintf(stderr, "\t");
+			fprintf(stderr, "----");
 		fprintf(stderr, "%s\n", start);
 next_loop:
 		start = comm + 1;

@@ -58,6 +58,7 @@ extern int cov_check(void);
 extern int cov_unregister(void);
 extern int cov_get_buffer(char *buffer, size_t len);
 extern int cov_buffer_print(void);
+extern int cov_buffer_print_pretty(void);
 extern int cov_buffer_clear(void);
 extern int cov_path_count(unsigned long *count);
 extern int get_cp_status(char *name, enum status_opt option, unsigned long *value);
