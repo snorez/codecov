@@ -89,6 +89,7 @@ struct checkpoint_user {
 	char __user *func;
 	unsigned long offset;
 	unsigned long level;
+	int _auto;
 };
 
 enum status_opt { STATUS_HIT, STATUS_LEVEL, STATUS_ENABLED, };
@@ -101,7 +102,7 @@ extern int cp_default_ret_entryhdl(struct kretprobe_instance *ri,
 
 extern void checkpoint_init(void);
 extern int checkpoint_add(char *name, char *func, unsigned long offset,
-			  unsigned long level);
+			  unsigned long level, int _auto);
 extern int checkpoint_xstate(unsigned long name, unsigned long len,
 			     unsigned long enable, unsigned long subpath);
 extern void checkpoint_del(char *name);

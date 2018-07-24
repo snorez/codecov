@@ -62,7 +62,7 @@ int cov_unregister(void)
  *		get_next_unhit_cp / get_next_unhit_func level
  */
 int checkpoint_add(char *name, char *func, unsigned long offset,
-		   unsigned long level)
+		   unsigned long level, int _auto)
 {
 	struct checkpoint tmp;
 
@@ -73,6 +73,7 @@ int checkpoint_add(char *name, char *func, unsigned long offset,
 	tmp.name_len = strlen(name);
 	tmp.func_len = strlen(func);
 	tmp.level = level;
+	tmp._auto = _auto;
 
 	int err = ioctl(cov_fd, COV_ADD_CP, (unsigned long)&tmp);
 
@@ -197,6 +198,37 @@ int get_path_map(char *buf, size_t *len)
 	arg_tmp[1] = (unsigned long)len;
 
 	return ioctl(cov_fd, COV_PATH_MAP, (unsigned long)arg_tmp);
+}
+
+void output_path_map(char *buf, size_t len)
+{
+	/* parse the path_map */
+	int tab = 0;
+	char *start = buf, *end = buf + len, *comm, *add;
+	while (start < end) {
+		tab = 0;
+		comm = strchr(start, ':');
+		if (!comm) {
+			fprintf(stderr, "no : in path_map, should never happen\n");
+			return;
+		}
+		*comm = 0;
+		while (add = strchr(start, '+')) {
+			*add = 0;
+			for (int i = 0; i < tab; i++)
+				fprintf(stderr, "\t");
+			tab = 1;
+			fprintf(stderr, "%s\n", start);
+			start = add+1;
+		}
+		if (!tab)
+			goto next_loop;
+		for (int i = 0; i < tab; i++)
+			fprintf(stderr, "\t");
+		fprintf(stderr, "%s\n", start);
+next_loop:
+		start = comm + 1;
+	}
 }
 
 int cov_path_count(unsigned long *count)

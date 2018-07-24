@@ -35,6 +35,7 @@ struct checkpoint {
 	char *func;
 	unsigned long offset;
 	unsigned long level;
+	int _auto;
 };
 
 #define THREAD_BUFFER_SIZE	PAGE_SIZE*8
@@ -46,7 +47,7 @@ struct buffer_user {
 enum status_opt { STATUS_HIT, STATUS_LEVEL, STATUS_ENABLED, };
 
 extern int checkpoint_add(char *name, char *func, unsigned long offset,
-			  unsigned long level);
+			  unsigned long level, int _auto);
 extern int checkpoint_del(char *name);
 extern int get_numhit(unsigned long *num_hit);
 extern int get_numtotal(unsigned long *num_total);
@@ -65,6 +66,7 @@ extern int get_next_unhit_func(char *buf, size_t len, size_t skip,
 extern int get_next_unhit_cp(char *buf, size_t len, size_t skip,
 			     unsigned long level);
 extern int get_path_map(char *buf, size_t *len);
+extern void output_path_map(char *buf, size_t len);
 extern int checkpoint_xstate(char *name, size_t len, unsigned long enable,
 			     unsigned long subpath);
 extern int checkpoint_xstate_all(unsigned long enable);

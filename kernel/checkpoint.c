@@ -229,10 +229,10 @@ err_free:
 }
 
 int checkpoint_add(char *name, char *func, unsigned long offset,
-		   unsigned long level)
+		   unsigned long level, int _auto)
 {
 	int err = do_checkpoint_add(name, func, offset, level);
-	if (!err && !offset)
+	if (!err && !offset && _auto)
 		do_auto_add(func, level);
 	return err;
 }
@@ -604,12 +604,12 @@ int get_path_map(char __user *buf, size_t __user *len)
 	}
 	len_need += 1;	/* for \0 */
 
-	err = -EAGAIN;
-	if (len_tmp < len_need) {
-		if (copy_to_user(len, &len_need, sizeof(size_t)))
-			err = -EFAULT;
+	err = -EFAULT;
+	if (copy_to_user(len, &len_need, sizeof(size_t)))
 		goto out;
-	}
+	err = -EAGAIN;
+	if (len_tmp < len_need)
+		goto out;
 
 	err = -ENOMEM;
 	buf_tmp = kzalloc(len_need, GFP_KERNEL);
@@ -641,13 +641,13 @@ int get_path_map(char __user *buf, size_t __user *len)
 				memcpy(buf_tmp+copid, cpcaller->name,
 						strlen(cpcaller->name));
 				copid += strlen(cpcaller->name);
+				sprintf(buf_tmp+copid, "(0x%016lx)",
+					atomic64_read(&cpcaller->address));
+				copid += 16 + 4;
 			} else {
 				memcpy(buf_tmp+copid, "NULL", 4);
 				copid += 4;
 			}
-			sprintf(buf_tmp+copid, "0x%016lx",
-				atomic64_read(&cpcaller->address));
-			copid += 16 + 2;
 		}
 
 		memcpy(buf_tmp+copid, ":", 1);
