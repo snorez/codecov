@@ -5,6 +5,9 @@
 #include <linux/uaccess.h>
 #include "./cov_thread.h"
 
+#define	FUNC_IN_STR	">>>"
+#define	FUNC_OUT_STR	"<<<"
+#define	INFUNC_IN_STR	"-->"
 struct buffer_user {
 	char __user *buffer;
 	size_t len;

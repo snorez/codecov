@@ -38,7 +38,14 @@ struct checkpoint {
 	int _auto;
 };
 
-#define THREAD_BUFFER_SIZE	PAGE_SIZE*8
+#define THREAD_BUFFER_SIZE	PAGE_SIZE*0x10
+#define	FUNC_IN_STR		">>>"
+#define	FUNC_OUT_STR		"<<<"
+#define	INFUNC_IN_STR		"-->"
+#define	TAB_STR			"--- "
+#define	TAB_IN_STR		"->> "
+#define	TAB_OUT_STR		"<<- "
+#define	TAB_INFUNC_STR		"=>> "
 struct buffer_user {
 	char *buffer;
 	size_t len;

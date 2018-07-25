@@ -144,7 +144,7 @@ int cov_buffer_print(void)
 	if (err == -1)
 		return -1;
 
-	fprintf(stderr, "%s\n", log_buffer);
+	fprintf(stdout, "%s\n", log_buffer);
 	return 0;
 }
 
@@ -154,8 +154,6 @@ int cov_buffer_print_pretty(void)
 	int err = cov_get_buffer(log_buffer, THREAD_BUFFER_SIZE);
 	if (err == -1)
 		return -1;
-	const char *in_str = ">>>>>>>>> ";
-	const char *out_str = "<<<<<<<<< ";
 
 	int tab = 0;
 	char *start = log_buffer;
@@ -174,16 +172,20 @@ int cov_buffer_print_pretty(void)
 			continue;
 		}
 
-		if (b = strstr(start, in_str)) {
+		if (b = strstr(start, FUNC_IN_STR)) {
 			for (int i = 0; i < tab; i++)
-				fprintf(stderr, "----");
-			fprintf(stderr, "%s\n", b+strlen(in_str));
+				fprintf(stdout, "%s", TAB_IN_STR);
+			fprintf(stdout, "%s\n", b+strlen(FUNC_IN_STR));
 			tab++;
-		} else if (b = strstr(start, out_str)) {
+		} else if (b = strstr(start, FUNC_OUT_STR)) {
 			tab--;
 			for (int i = 0; i < tab; i++)
-				fprintf(stderr, "----");
-			fprintf(stderr, "%s\n", b+strlen(out_str));
+				fprintf(stdout, "%s", TAB_OUT_STR);
+			fprintf(stdout, "%s\n", b+strlen(FUNC_OUT_STR));
+		} else if (b = strstr(start, INFUNC_IN_STR)) {
+			for (int i = 0; i < tab; i++)
+				fprintf(stdout, "%s", TAB_INFUNC_STR);
+			fprintf(stdout, "%s\n", b+strlen(INFUNC_IN_STR));
 		}
 		start = line + 1;
 	}
@@ -258,16 +260,16 @@ void output_path_map(char *buf, size_t len)
 		while (add = strchr(start, '+')) {
 			*add = 0;
 			for (int i = 0; i < tab; i++)
-				fprintf(stderr, "----");
+				fprintf(stdout, "%s", TAB_STR);
 			tab = 1;
-			fprintf(stderr, "%s\n", start);
+			fprintf(stdout, "%s\n", start);
 			start = add+1;
 		}
 		if (!tab)
 			goto next_loop;
 		for (int i = 0; i < tab; i++)
-			fprintf(stderr, "----");
-		fprintf(stderr, "%s\n", start);
+			fprintf(stdout, "%s", TAB_STR);
+		fprintf(stdout, "%s\n", start);
 next_loop:
 		start = comm + 1;
 	}

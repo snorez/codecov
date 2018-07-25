@@ -11,7 +11,7 @@
  * each process gets a coverr, a current call stack root, and something else
  */
 
-#define THREAD_BUFFER_SIZE	PAGE_SIZE*8
+#define THREAD_BUFFER_SIZE	PAGE_SIZE*0x10
 struct checkpoint;
 struct coverr;
 #define COV_THREAD_MAX	64

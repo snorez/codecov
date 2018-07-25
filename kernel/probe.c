@@ -126,7 +126,7 @@ int cp_default_kp_prehdl(struct kprobe *kp, struct pt_regs *reg)
 				effective = 1;
 
 #ifdef CTBUF_DEBUG
-			ctbuf_print("--------> %s\n", tmp->name);
+			ctbuf_print("%s%s\n", INFUNC_IN_STR, tmp->name);
 #endif
 
 #ifdef CP_CALLER
@@ -176,7 +176,7 @@ int cp_default_ret_hdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 	list_for_each_entry(tmp, &cproot, siblings) {
 		if (ri->rp == tmp->this_retprobe) {
 #ifdef CTBUF_DEBUG
-			ctbuf_print("<<<<<<<<< %s\n", tmp->name);
+			ctbuf_print("%s%s\n", FUNC_OUT_STR, tmp->name);
 #endif
 			break;
 		}
@@ -226,7 +226,7 @@ int cp_default_ret_entryhdl(struct kretprobe_instance *ri, struct pt_regs *regs)
 				effective = 1;
 
 #ifdef CTBUF_DEBUG
-			ctbuf_print(">>>>>>>>> %s\n", tmp->name);
+			ctbuf_print("%s%s\n", FUNC_IN_STR, tmp->name);
 #endif
 			/*
 			 * XXX: note that ri->ret_addr not the current caller addr.
